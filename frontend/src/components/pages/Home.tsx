@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom';
-import { Skull, Users, Shield, Package, Hammer, Calendar, Bird } from 'lucide-react';
 import Navbar from '../Navbar';
 
 export default function Home() {
