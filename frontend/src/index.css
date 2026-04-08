@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.2; }
+}
+
+@keyframes subtle-drift {
+    0% { transform: scale(1.05); }
+    100% { transform: scale(1.15); }
+}
+
+@layer base {
+  body {
+    @apply bg-black text-gray-300;
+    font-family: 'Nunito', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Nunito', sans-serif;
+    letter-spacing: -0.02em;
+  }
+  
+  /* Modern Global Border Radius overrides for a super smooth UI */
+  .rounded-sm, .rounded, .rounded-md, .rounded-lg, .rounded-xl {
+    @apply rounded-[2rem] backdrop-blur-2xl border border-white/10;
+  }
+  
+  /* Modern soft Glassmorphism Shadows */
+  .border, .border-white\/10, .border-white\/5 {
+    @apply shadow-[0_8px_40px_rgba(0,0,0,0.4)];
+  }
+  
+  .bg-black {
+    @apply bg-[#030303];
+  }
+
+  .bg-gray-950 {
+    @apply bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5;
+  }
+  
+  .bg-gray-900 {
+    @apply bg-[#15151a]/80 backdrop-blur-xl;
+  }
+}
+
+  .font-serif {
+    font-family: 'Nunito', sans-serif; /* Fallback to keep everything rounded */
+  }
+  
+  .font-sans {
+    font-family: 'Nunito', sans-serif;
+  }
+
+.animate-pulse-slow {
+  animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-subtle-drift {
+    animation: subtle-drift 10s ease-in-out infinite alternate;
+}
+
