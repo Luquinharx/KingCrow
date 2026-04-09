@@ -94,30 +94,44 @@ export function useClanMemberData(username: string | undefined) {
       const lastDailySnapshotStr = dates.length > 0 ? dailyData[dates[dates.length - 1]]?.[dbUser] : null;
       if (lastDailySnapshotStr) {
          const baselineLoot = lastDailySnapshotStr.alltimeloot || lastDailySnapshotStr.all_time_loots || 0;
-         const baselineExp = lastDailySnapshotStr.total_exp || 0;
          dailyLoot = Math.max(0, allTimeLootsUser - baselineLoot);
-         // Daily TS by Total Exp diff
-         dailyTS = Math.max(0, currentTotalExp - baselineExp);
+         
+         // Fix pra TS Diário: Procurar o último snapshot que tenha total_exp salvo
+         let baselineExp = null;
+         for (let i = dates.length - 1; i >= 0; i--) {
+             const snap = dailyData[dates[i]]?.[dbUser];
+             if (snap && snap.total_exp !== undefined) {
+                 baselineExp = snap.total_exp;
+                 break;
+             }
+         }
+         
+         if (baselineExp !== null) {
+            dailyTS = Math.max(0, currentTotalExp - baselineExp);
+         } else {
+            dailyTS = 0; // Se não tem histórico com exp (ex: antes do scraper novo), mostra 0.
+         }
       } else {
          dailyLoot = allTimeLootsUser;
-         dailyTS = currentTotalExp;
+         dailyTS = 0;
       }
 
       // Compile daily history from daily nodes
       const historyDaily: { data: string; loot: number; ts: number }[] = [];
       let prevLoot = 0;
-      let prevExp = 0;
+      let prevExp = null;
       
       for (const d of dates) {
           const snap = dailyData[d]?.[dbUser];
           if (snap) {
               const curLoot = snap.alltimeloot || snap.all_time_loots || 0;
-              const curExp = snap.total_exp || 0;
+              const curExp = snap.total_exp !== undefined ? snap.total_exp : null;
+              
               if (prevLoot > 0) {
                  historyDaily.push({
                      data: d.slice(5), // MM-DD
                      loot: Math.max(0, curLoot - prevLoot),
-                     ts: Math.max(0, curExp - prevExp)
+                     ts: (curExp !== null && prevExp !== null) ? Math.max(0, curExp - prevExp) : 0
                  });
               }
               prevLoot = curLoot;

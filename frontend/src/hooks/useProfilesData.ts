@@ -58,18 +58,26 @@ export function useProfilesData() {
         }
 
         const dates = Object.keys(dailyData || {}).sort();
-        const lastDailySnap = dates.length > 0 ? dailyData[dates[dates.length - 1]] : {};
+        
+        // Função auxiliar para buscar o último snapshot válido com total_exp para aquele usuário
+        const getBaselineExp = (dbUserKey: string) => {
+           for (let i = dates.length - 1; i >= 0; i--) {
+               const userSnap = dailyData[dates[i]]?.[dbUserKey];
+               if (userSnap && userSnap.total_exp !== undefined) {
+                   return userSnap.total_exp;
+               }
+           }
+           return null;
+        };
 
         const parsedProfiles: MemberProfile[] = Object.values(data).map((p: any) => {
           let dailyTSCalc = 0;
           const dbUserKey = encodeURIComponent(p.username);
-          const snap = lastDailySnap?.[dbUserKey];
           
-          if (snap) {
-            const baselineExp = snap.total_exp || 0;
+          const baselineExp = getBaselineExp(dbUserKey);
+          
+          if (baselineExp !== null) {
             dailyTSCalc = Math.max(0, (p.total_exp || 0) - baselineExp);
-          } else {
-            dailyTSCalc = p.total_exp || 0;
           }
 
           return {
