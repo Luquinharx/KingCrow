@@ -7,10 +7,6 @@ import { RankBadge } from '../RankBadge';
 
 type SortKey = keyof MemberProfile;
 
-function toTitleCase(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
 function formatNumber(n: number): string {
   return n.toLocaleString('pt-BR');
 }
@@ -104,6 +100,7 @@ export default function EstatisticasTS() {
   }, [dedupedProfiles]);
 
   const totalWeeklyTS = dedupedProfiles.reduce((acc, curr) => acc + curr.weekly_ts, 0);
+  const totalDailyTS = dedupedProfiles.reduce((acc, curr) => acc + (curr.daily_ts_calc || 0), 0);
   const topEarner = dedupedProfiles.length > 0 ? [...dedupedProfiles].sort((a, b) => b.weekly_ts - a.weekly_ts)[0] : null;
 
   const latestCollectedAt = dedupedProfiles.length > 0 ? dedupedProfiles[0].collected_at : '';
@@ -149,7 +146,7 @@ export default function EstatisticasTS() {
         </header>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-lg backdrop-blur-sm group hover:border-yellow-900/30 transition-all">        
             <div className="flex items-center gap-5">
               <div className="p-4 bg-black border border-white/10 rounded-sm text-gray-400 group-hover:text-yellow-500 transition-colors">
@@ -158,6 +155,20 @@ export default function EstatisticasTS() {
               <div>
                 <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Tracked Members</p>
                 <p className="text-3xl font-serif font-black text-white mt-1">{profiles.length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-lg backdrop-blur-sm group hover:border-sky-900/30 transition-all">        
+             <div className="flex items-center gap-5">
+              <div className="p-4 bg-black border border-white/10 rounded-sm text-gray-400 group-hover:text-sky-500 transition-colors">
+                <TrendingUp className="w-8 h-8" />
+              </div>
+              <div>
+                <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Total Daily TS</p>
+                <p className="text-3xl font-serif font-black text-white mt-1 text-sky-500 drop-shadow-[0_0_8px_rgba(14,165,233,0.5)]">
+                    +{(totalDailyTS > 0 ? totalDailyTS : 0).toLocaleString('pt-BR')}
+                </p>
               </div>
             </div>
           </div>
@@ -183,7 +194,7 @@ export default function EstatisticasTS() {
               </div>
               <div>
                 <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Top Earner</p>
-                <p className="text-3xl font-serif font-black text-white mt-1 truncate max-w-[200px]" title={topEarner?.username}>
+                <p className="text-3xl font-serif font-black text-white mt-1 truncate max-w-[150px]" title={topEarner?.username}>
                   {topEarner?.username || '-'}
                 </p>
               </div>
@@ -318,7 +329,7 @@ export default function EstatisticasTS() {
                           "bg-yellow-500 shadow-[0_0_5px_red]"
                         )} title="Updated" />
                         <Link to={`/dashboard?user=${encodeURIComponent(p.username)}`} className="tracking-wide hover:text-yellow-500 hover:underline transition-all">
-                            {toTitleCase(p.username)}
+                            {p.username}
                         </Link>
                         {isHighlight && <span className="text-red-600 text-sm" title="Performance Destacada (5k+ Weekly TS)">💀</span>}
                       </td>

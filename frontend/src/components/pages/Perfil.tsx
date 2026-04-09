@@ -218,7 +218,7 @@ export default function Perfil() {
                   {[...stats.dailyHistory].reverse().map((l, i) => (
                     <tr key={i} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-3 text-gray-400">{l.data}</td>
-                      <td className="px-6 py-3 text-right text-yellow-400 font-bold drop-shadow-[0_0_5px_rgba(234,179,8,0.3)]">+{l.valor.toLocaleString('pt-BR')}</td>
+                      <td className="px-6 py-3 text-right text-yellow-400 font-bold drop-shadow-[0_0_5px_rgba(234,179,8,0.3)]">+{l.loot.toLocaleString('pt-BR')}</td>
                     </tr>
                   ))}
                 </tbody>

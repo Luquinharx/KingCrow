@@ -83,11 +83,11 @@ export default function Dashboard() {
         av = Number(profileA?.all_time_loots || a.currentAll || 0);
         bv = Number(profileB?.all_time_loots || b.currentAll || 0);
       } else if (aSortKeyStr === 'weeklyToDate') {
-        av = Math.max(Number(profileA?.weekly_loots || a.weeklyToDate || 0), Number(profileA?.clan_weekly_loots || 0));
-        bv = Math.max(Number(profileB?.weekly_loots || b.weeklyToDate || 0), Number(profileB?.clan_weekly_loots || 0));
+        av = Number(profileA?.weekly_loots || a.weeklyToDate || 0);
+        bv = Number(profileB?.weekly_loots || b.weeklyToDate || 0);
       } else if (aSortKeyStr === 'clanWeeklyLoot') {
-        av = Math.max(Number(profileA?.clan_weekly_loots || 0), Number(profileA?.weekly_loots || a.weeklyToDate || 0));
-        bv = Math.max(Number(profileB?.clan_weekly_loots || 0), Number(profileB?.weekly_loots || b.weeklyToDate || 0));
+        av = Number(profileA?.clan_weekly_loots || 0);
+        bv = Number(profileB?.clan_weekly_loots || 0);
       } else if (aSortKeyStr === 'dailyLoot') {
         av = Number(a.dailyLoot || 0);
         bv = Number(b.dailyLoot || 0);
@@ -324,16 +324,16 @@ export default function Dashboard() {
                   const username = r.username;
                   const rank = r.rank;
                   const dailyLoot = Number(r.dailyLoot || 0);
-                  const rawWeeklyLoot = Number(profile?.weekly_loots || 0);
+                  const rawWeeklyLoot = Number(profile?.weekly_loots || r.weeklyToDate || 0);
                   const rawClanWeeklyLoot = Number(profile?.clan_weekly_loots || 0);
-                  const weeklyLoot = Math.max(rawWeeklyLoot, rawClanWeeklyLoot);
-                  const clanWeeklyLoot = Math.max(rawClanWeeklyLoot, rawWeeklyLoot);
+                  const weeklyLoot = rawWeeklyLoot;
+                  const clanWeeklyLoot = rawClanWeeklyLoot;
                   const allTimeLoot = Number(profile?.all_time_loots || r.currentAll || 0);
                   const streak = Number(r.streak || 0);
                   const rawClanWeeklyTs = Number(profile?.clan_weekly_ts || 0);
                   const rawWeeklyTs = Number(profile?.weekly_ts || 0);
-                  const clanWeeklyTs = Math.max(rawClanWeeklyTs, rawWeeklyTs);
-                  const weeklyTs = Math.max(rawClanWeeklyTs, rawWeeklyTs);
+                  const clanWeeklyTs = rawClanWeeklyTs;
+                  const weeklyTs = rawWeeklyTs;
                                     const isClanEventHighlight = clanWeeklyLoot >= 5000 || clanWeeklyTs >= 3000000000;
                   
                   const dlText = (dailyLoot >= 0 ? '+' : '') + dailyLoot.toLocaleString('pt-BR');

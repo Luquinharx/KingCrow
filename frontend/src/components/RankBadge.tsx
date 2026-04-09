@@ -7,36 +7,37 @@ export function RankBadge({ rank }: { rank: string }) {
   let displayName = rank || 'Unknown';
 
   switch (rank) {
-    case 'IronHeart':
-    case 'Leader':
-      color = 'bg-yellow-500 text-black ring-yellow-400';
+    case 'KING':
+    case 'K I N G':
+      color = 'bg-yellow-500 text-yellow-950 ring-yellow-400 font-black';
       Icon = Star;
-      displayName = '1. The King';
+      displayName = '1. KING';
       break;
-    case 'High Warden':
-      color = 'bg-yellow-900 text-yellow-300 ring-yellow-700';
+    case 'Regent Crow':
+      color = 'bg-gray-300 text-gray-900 ring-gray-400 font-bold';
       Icon = Shield;
-      displayName = '2. Night Watcher';
+      displayName = '2. Regent Crow';
       break;
-    case 'Blade Master':
-      color = 'bg-gray-700 text-gray-200 ring-gray-500';
+    case 'Eternal Crow':
+    case 'Eternal Crows':
+      color = 'bg-[#cd7f32] text-white ring-[#a05f20] font-bold';
       Icon = Swords;
-      displayName = '3. Talon Master';
+      displayName = '3. Eternal Crows';
       break;
-    case 'Guardian':
-      color = 'bg-gray-800 text-gray-300 ring-gray-600';
+    case 'Legendary Crows':
+      color = 'bg-zinc-800 text-zinc-300 ring-zinc-700';
       Icon = Shield;
-      displayName = '4. Shadow Guard';
+      displayName = '4. Legendary Crows';
       break;
-    case 'Gate Soldier':
-      color = 'bg-gray-900 text-gray-400 ring-gray-700';
+    case 'Black Crows':
+      color = 'bg-neutral-900 text-neutral-400 ring-neutral-800';
       Icon = Circle;
-      displayName = '5. Flock Grunt';
+      displayName = '5. Black Crows';
       break;
-    case 'Street Cleaner':
-      color = 'bg-black text-gray-500 ring-gray-800';
+    case 'Nest Crows':
+      color = 'bg-stone-950 text-stone-500 ring-stone-800';
       Icon = User;
-      displayName = '6. Scavenger';
+      displayName = '6. Nest Crows';
       break;
     default:
       color = 'bg-black text-gray-600 ring-gray-800';

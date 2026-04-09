@@ -27,13 +27,14 @@ export interface ClanMemberStats {
   rank_score?: number;
   
   // Compatibility fields for the frontend
-  currentAll: number; // all_time_loots (user's total)
-  dailyLoot: number; // Calculated from snapshots
-  weeklyToDate: number; // weekly_loots (user's weekly)
-  clanAllTime: number; // all_time_clan_loots (user in clan)
-  dailyHistory: { data: string; valor: number }[];
+  currentAll: number;
+  dailyLoot: number;
+  dailyTS: number;
+  weeklyToDate: number;
+  clanAllTime: number;
+  dailyHistory: { data: string; loot: number; ts: number }[];
   weeklyValues: number[];
-  weeklyHistory: { semana: string; total: number }[];
+  weeklyHistory: { semana: string; loot: number; ts: number }[];
 }
 
 export function useScrapedUsernames() {
@@ -47,7 +48,9 @@ export function useScrapedUsernames() {
         const profiles = await res.json();
         if (!profiles) { setUsernames([]); setLoading(false); return; }
         
-        setUsernames(Object.keys(profiles).sort());
+        setUsernames(Object.keys(profiles).map(k => {
+          try { return decodeURIComponent(k); } catch(e) { return k; }
+        }).sort());
       } catch {
         setUsernames([]);
       }
@@ -76,19 +79,98 @@ export function useClanMemberData(username: string | undefined) {
       const allTimeLootsUser = data.all_time_loots || 0; // User's total loots
       const weeklyLootsUser = data.weekly_loots || 0; // User's weekly loots
       const allTimeClanLoots = data.all_time_clan_loots || 0; // User's loots in clan
+      const currentTotalExp = data.total_exp || 0;
       
-      // Calculate daily loot based on São Paulo timezone (09:00 daily reset)
-      const dailyLoot = data.daily_loot_calc || 0;
+      const dailyRes = await fetch(FIREBASE_RT_URL + `/daily.json`);
+      const dailyData = dailyRes.ok ? await dailyRes.json() : {};
+
+      const weeklyRes = await fetch(FIREBASE_RT_URL + `/weekly.json`);
+      const weeklyData = weeklyRes.ok ? await weeklyRes.json() : {};
+      
+      const dates = Object.keys(dailyData || {}).sort();
+      let dailyLoot = 0;
+      let dailyTS = 0;
+      
+      const lastDailySnapshotStr = dates.length > 0 ? dailyData[dates[dates.length - 1]]?.[dbUser] : null;
+      if (lastDailySnapshotStr) {
+         const baselineLoot = lastDailySnapshotStr.alltimeloot || lastDailySnapshotStr.all_time_loots || 0;
+         const baselineExp = lastDailySnapshotStr.total_exp || 0;
+         dailyLoot = Math.max(0, allTimeLootsUser - baselineLoot);
+         // Daily TS by Total Exp diff
+         dailyTS = Math.max(0, currentTotalExp - baselineExp);
+      } else {
+         dailyLoot = allTimeLootsUser;
+         dailyTS = currentTotalExp;
+      }
+
+      // Compile daily history from daily nodes
+      const historyDaily: { data: string; loot: number; ts: number }[] = [];
+      let prevLoot = 0;
+      let prevExp = 0;
+      
+      for (const d of dates) {
+          const snap = dailyData[d]?.[dbUser];
+          if (snap) {
+              const curLoot = snap.alltimeloot || snap.all_time_loots || 0;
+              const curExp = snap.total_exp || 0;
+              if (prevLoot > 0) {
+                 historyDaily.push({
+                     data: d.slice(5), // MM-DD
+                     loot: Math.max(0, curLoot - prevLoot),
+                     ts: Math.max(0, curExp - prevExp)
+                 });
+              }
+              prevLoot = curLoot;
+              prevExp = curExp;
+          }
+      }
+      
+      historyDaily.push({ 
+          data: "Atual", 
+          loot: dailyLoot, 
+          ts: dailyTS 
+      });
+
+      // Weekly History from weekly nodes
+      const historyWeekly: { semana: string; loot: number; ts: number }[] = [];
+      const weekDates = Object.keys(weeklyData || {}).sort();
+      let prevWeekLoot = 0;
+      let prevWeekTS = 0;
+      
+      for (const d of weekDates) {
+          const snap = weeklyData[d]?.[dbUser];
+          if (snap) {
+              const curLoot = snap.all_time_loots || snap.alltimeloot || 0;
+              const curTs = snap.all_time_ts || 0;
+              if (prevWeekLoot > 0) {
+                 historyWeekly.push({
+                     semana: d,
+                     loot: Math.max(0, curLoot - prevWeekLoot),
+                     ts: Math.max(0, curTs - prevWeekTS)
+                 });
+              }
+              prevWeekLoot = curLoot;
+              prevWeekTS = curTs;
+          }
+      }
+      
+      // Current running week
+      historyWeekly.push({
+          semana: "Atual",
+          loot: data.weekly_loots || data.clan_weekly_loots || 0,
+          ts: data.weekly_ts || data.clan_weekly_ts || 0
+      });
 
       setStats({
         ...data,
-        currentAll: allTimeLootsUser, // All Time Loots (user)
-        dailyLoot: dailyLoot, // Daily loot calculated from snapshots
-        weeklyToDate: weeklyLootsUser, // Week Loot (user)
-        clanAllTime: allTimeClanLoots, // Clan Loot
-        dailyHistory: [{ data: new Date().toISOString().slice(0,10), valor: dailyLoot }],
+        currentAll: allTimeLootsUser,
+        dailyLoot: dailyLoot,
+        dailyTS: dailyTS,
+        weeklyToDate: Math.max(data.weekly_loots || 0, data.clan_weekly_loots || 0),
+        clanAllTime: allTimeClanLoots,
+        dailyHistory: historyDaily.slice(-15),
         weeklyValues: [weeklyLootsUser],
-        weeklyHistory: [{ semana: "Current", total: weeklyLootsUser }]
+        weeklyHistory: historyWeekly.slice(-10)
       });
     } catch (err) {
       console.error("Error fetching clan member data:", err);

@@ -96,14 +96,14 @@ def scrape_and_push():
             "username": m["username"],
             "collected_at": now_iso,
 
-            "weekly_ts": max(raw_weekly_ts, raw_clan_weekly_ts),
-            "clan_weekly_ts": max(raw_weekly_ts, raw_clan_weekly_ts),
+            "weekly_ts": raw_weekly_ts,
+            "clan_weekly_ts": raw_clan_weekly_ts,
             "all_time_ts": parse_int(pdata.get("all_time_ts", "0")),
             "total_exp": parse_int(pdata.get("total_exp", "0")),
 
-            "weekly_loots": max(raw_weekly_loots, raw_clan_weekly_loots),
+            "weekly_loots": raw_weekly_loots,
             "all_time_loots": parse_int(pdata.get("all_time_loots", "0")),
-            "clan_weekly_loots": max(raw_weekly_loots, raw_clan_weekly_loots),
+            "clan_weekly_loots": raw_clan_weekly_loots,
             "all_time_clan_loots": parse_int(pdata.get("all_time_clan_loots", "0")),
 
             "last_clan_join": pdata.get("last_clan_join", "")
@@ -142,7 +142,15 @@ def scrape_and_push():
     logging.info("Scrape concluído.")
 
 if __name__ == "__main__":
+    from apscheduler.triggers.cron import CronTrigger
     scrape_and_push()
     scheduler = BlockingScheduler()
-    scheduler.add_job(scrape_and_push, "interval", minutes=5)
+    # Executa a cada 10 minutos terminando em 2 (ex: 00:02, 00:12, 00:22, etc)
+    trigger_10min = CronTrigger(minute='2,12,22,32,42,52', timezone=BRAZIL_TZ)
+    # Garante o snapshot de fechamento do dia as 07:53
+    trigger_end_of_day = CronTrigger(hour=7, minute=53, timezone=BRAZIL_TZ)
+    
+    scheduler.add_job(scrape_and_push, trigger_10min)
+    scheduler.add_job(scrape_and_push, trigger_end_of_day)
+    logging.info("Agendado: a cada 10 min (x:02, x:12...) e fechamento diário as 07:53.")
     scheduler.start()

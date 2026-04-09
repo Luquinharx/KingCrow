@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const FIREBASE_PROFILES_URL = "https://dead-bb-default-rtdb.firebaseio.com/profiles.json";
+const FIREBASE_URL = "https://dead-bb-default-rtdb.firebaseio.com";
 
 export interface MemberProfile {
   username: string;
@@ -44,15 +44,41 @@ export function useProfilesData() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(FIREBASE_PROFILES_URL);
-        const data = await res.json();
+        const [profRes, dailyRes] = await Promise.all([
+          fetch(`${FIREBASE_URL}/profiles.json`),
+          fetch(`${FIREBASE_URL}/daily.json`)
+        ]);
+        
+        const data = await profRes.json();
+        const dailyData = dailyRes.ok ? await dailyRes.json() : {};
         
         if (!data) {
           setProfiles([]);
           return;
         }
 
-        const parsedProfiles: MemberProfile[] = Object.values(data);
+        const dates = Object.keys(dailyData || {}).sort();
+        const lastDailySnap = dates.length > 0 ? dailyData[dates[dates.length - 1]] : {};
+
+        const parsedProfiles: MemberProfile[] = Object.values(data).map((p: any) => {
+          let dailyTSCalc = 0;
+          const dbUserKey = encodeURIComponent(p.username);
+          const snap = lastDailySnap?.[dbUserKey];
+          
+          if (snap) {
+            const baselineExp = snap.total_exp || 0;
+            dailyTSCalc = Math.max(0, (p.total_exp || 0) - baselineExp);
+          } else {
+            dailyTSCalc = p.total_exp || 0;
+          }
+
+          return {
+            ...p,
+            username: p.username,
+            daily_ts_calc: dailyTSCalc
+          };
+        });
+        
         setProfiles(parsedProfiles);
       } catch (error) {
         console.error('Failed to fetch profiles:', error);

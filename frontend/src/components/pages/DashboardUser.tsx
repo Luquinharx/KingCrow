@@ -45,36 +45,19 @@ export default function DashboardUser() {
   // Buscar dados de TS do membro selecionado
   const memberTSData = profiles.find(p => p.username.toLowerCase() === (selectedNickJogo?.toLowerCase() || ''));
 
-  const girosDisponiveis = stats ? Math.floor((stats.weeklyToDate || 0) / 5000) : 0;
-
-  // Calculo Unificado de Loot
-  const dbClanLoot = firestoreData.baseLoot || 0;
-  const farmedLoot = stats ? stats.weeklyValues.reduce((a, b) => a + b, 0) + stats.weeklyToDate : 0;
-  const totalLoot = dbClanLoot + farmedLoot; // Base (se houver) + Apenas o que foi farmado
-
-  // Calculo de Meses no Cla
-  let monthsInClan = 0;
+  // Calculo de Meses no Cla / Join Date
   let formattedJoinDate = 'Not found';
-  if (firestoreData.joinDate && !isNaN(firestoreData.joinDate.getTime())) {
-      const now = new Date();
+  if (stats?.last_clan_join) {
+     const joinDate = new Date(stats.last_clan_join);
+     if (!isNaN(joinDate.getTime())) {
+         formattedJoinDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(joinDate).toUpperCase();
+     }
+  } else if (firestoreData.joinDate && !isNaN(firestoreData.joinDate.getTime())) {
       const join = firestoreData.joinDate;
-      const diffTime = Math.abs(now.getTime() - join.getTime());
-      monthsInClan = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30));
       formattedJoinDate = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(join).toUpperCase();
   }
 
-  // Calculo do Colateral
   const totalDonations = firestoreData.totalDonations || 0;
-  const collateralMonthsVal = monthsInClan * 7000000;
-  const collateralLootVal = totalLoot * 500;
-  const collateralDonationsVal = totalDonations * 2;
-  const collateralTotal = collateralMonthsVal + collateralLootVal + collateralDonationsVal;
-
-  const tooltipText = `${monthsInClan} meses = ${collateralMonthsVal.toLocaleString('pt-BR')}
-${~~(totalDonations / 1000000)}M doados = ${collateralDonationsVal.toLocaleString('pt-BR')}
-${~~(totalLoot / 1000)}K loot = ${collateralLootVal.toLocaleString('pt-BR')}
--------------------
-Total = ${collateralTotal.toLocaleString('pt-BR')}`;
 
   const isLoading = loadingNames;
 
@@ -133,50 +116,32 @@ Total = ${collateralTotal.toLocaleString('pt-BR')}`;
           </div>
         ) : stats ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-sm flex items-center gap-4 hover:border-yellow-900/30 transition-colors">
-
                   <div>
                     <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Member</p>
-                    <p className="text-xl font-bold text-white font-serif truncate max-w-[150px]" title={stats.username}>{stats.username}</p>
+                    <p className="text-xl font-bold text-white font-serif truncate max-w-[200px]" title={stats.username}>{stats.username}</p>
                     <p className="text-[10px] text-gray-500 mt-1 uppercase">Join: {formattedJoinDate}</p>
                     {memberTSData && <p className="text-[10px] text-purple-400 mt-1 uppercase font-bold">{memberTSData.rank}</p>}
                   </div>
               </div>
 
               <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-sm flex items-center gap-4 hover:border-yellow-900/30 transition-colors">
-
                   <div>
                     <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Donated</p>
                     <p className="text-xl font-bold text-white font-serif">{totalDonations.toLocaleString('pt-BR')}</p>
                   </div>
               </div>
-
-              <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-sm flex items-center gap-4 hover:border-yellow-900/30 transition-colors" title={tooltipText}>
-
-                  <div>
-                    <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Collateral</p>
-                    <p className="text-xl font-bold text-white font-serif">{collateralTotal.toLocaleString('pt-BR')}</p>
-                  </div>
-              </div>
-
-              <div className="bg-gray-900/50 border border-white/5 rounded-sm p-6 shadow-sm flex items-center gap-4 hover:border-yellow-900/30 transition-colors">
-
-                  <div>
-                    <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Spins</p>
-                    <p className="text-xl font-bold text-white font-serif">{girosDisponiveis}</p>
-                  </div>
-                </div>
             </div>
 
-            {/* MÃ©tricas de Loot */}
+            {/* MÃ©tricas de Loot e TS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-yellow-900/30 transition-colors relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-16 h-16 bg-yellow-900/10 blur-[30px] rounded-full"></div>
                 <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Loot Today</h3>
-                  <p className="text-3xl font-black text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]">
-                    +{stats.dailyLoot.toLocaleString('pt-BR')}
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Daily Loot</h3>
+                  <p className="text-2xl font-black text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.3)]">
+                    +{stats.dailyLoot.toLocaleString('pt-BR')} 
                   </p>
                 </div>
               </div>
@@ -194,47 +159,105 @@ Total = ${collateralTotal.toLocaleString('pt-BR')}`;
               <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-white/20 transition-colors relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-16 h-16 bg-gray-500/10 blur-[30px] rounded-full"></div>
                 <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">All Time Loots</h3>
-                  <p className="text-3xl font-bold text-gray-300 font-serif">
-                    {stats.currentAll.toLocaleString('pt-BR')}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-yellow-900/30 transition-colors relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-yellow-900/10 blur-[30px] rounded-full"></div>
-                <div className="flex flex-col gap-2">
                   <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Gang Loot</h3>
                   <p className="text-3xl font-bold text-white font-serif">
                     {(stats.clanAllTime || memberTSData?.all_time_clan_loots || 0).toLocaleString('pt-BR')}
                   </p>
                 </div>
               </div>
+
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-white/20 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-gray-500/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">All Time Loots</h3>
+                  <p className="text-3xl font-bold text-gray-300 font-serif">
+                    {stats.currentAll.toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* Charts */}
+            {/* MÃ©tricas de TS */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Daily TS</h3>
+                  <p className="text-2xl font-black text-purple-500 drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">
+                    +{stats.dailyTS.toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Weekly TS</h3>
+                  <p className="text-2xl font-bold text-white font-serif">
+                    {(stats.weekly_ts || memberTSData?.weekly_ts || 0).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Gang Weekly TS</h3>
+                  <p className="text-2xl font-bold text-white font-serif">
+                    {(stats.clan_weekly_ts || memberTSData?.clan_weekly_ts || 0).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">All Time TS</h3>
+                  <p className="text-2xl font-bold text-gray-300 font-serif">
+                    {(stats.all_time_ts || memberTSData?.all_time_ts || 0).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-emerald-900/30 transition-colors relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-900/10 blur-[30px] rounded-full"></div>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Total Exp</h3>
+                  <p className="text-2xl font-bold text-emerald-400 font-serif">
+                    {(stats.total_exp || memberTSData?.total_exp || 0).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Charts Unified */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Loot DiÃ¡rio - Area Chart */}
+              {/* Historico Diario - Area Chart */}
               <div className="bg-gray-950 border border-white/5 rounded-sm p-6 shadow-xl">
                 <h2 className="text-lg font-serif font-bold text-gray-300 mb-6 uppercase tracking-wider">Activity Log (Daily)</h2>
                 {stats.dailyHistory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <AreaChart data={stats.dailyHistory}>
                       <defs>
-                        <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="colorLoot" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
                           <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorTS" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1c1917" />
                       <XAxis dataKey="data" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                      <YAxis stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
+                      <YAxis yAxisId="left" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
+                      <YAxis yAxisId="right" orientation="right" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
                       <RechartsTooltip
                         contentStyle={{ backgroundColor: '#0c0a09', border: '1px solid #292524', borderRadius: '0px', color: '#e7e5e4', fontFamily: 'monospace' }}
-                        itemStyle={{ color: '#facc15' }}
                         labelStyle={{ color: '#78716c' }}
                       />
-                      <Area type="monotone" dataKey="valor" stroke="#eab308" fillOpacity={1} fill="url(#colorValor)" strokeWidth={2} />
+                      <Area yAxisId="left" type="monotone" dataKey="loot" stroke="#eab308" name="Loot" fillOpacity={1} fill="url(#colorLoot)" strokeWidth={2} />
+                      <Area yAxisId="right" type="monotone" dataKey="ts" stroke="#a855f7" name="TS" fillOpacity={1} fill="url(#colorTS)" strokeWidth={2} />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
@@ -242,22 +265,23 @@ Total = ${collateralTotal.toLocaleString('pt-BR')}`;
                 )}
               </div>
 
-              {/* Loot Semanal - Bar Chart */}
+              {/* Historico Semanal - Bar Chart */}
               <div className="bg-gray-950 border border-white/5 rounded-sm p-6 shadow-xl">
-                <h2 className="text-lg font-serif font-bold text-gray-300 mb-6 uppercase tracking-wider">Weekly Performance</h2>
+                <h2 className="text-lg font-serif font-bold text-gray-300 mb-6 uppercase tracking-wider">Histórico Semanal</h2>
                 {stats.weeklyHistory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={stats.weeklyHistory}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1c1917" />
                       <XAxis dataKey="semana" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                      <YAxis stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
+                      <YAxis yAxisId="left" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
+                      <YAxis yAxisId="right" orientation="right" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
                       <RechartsTooltip
                         cursor={{fill: '#1c1917'}}
                         contentStyle={{ backgroundColor: '#0c0a09', border: '1px solid #292524', borderRadius: '0px', color: '#e7e5e4', fontFamily: 'monospace' }}
-                        itemStyle={{ color: '#facc15' }}
                         labelStyle={{ color: '#78716c' }}
                       />
-                      <Bar dataKey="total" fill="#854d0e" radius={[2, 2, 0, 0]} activeBar={{ fill: '#eab308' }} />
+                      <Bar yAxisId="left" dataKey="loot" name="Loot" fill="#854d0e" radius={[2, 2, 0, 0]} activeBar={{ fill: '#eab308' }} />
+                      <Bar yAxisId="right" dataKey="ts" name="TS" fill="#6b21a8" radius={[2, 2, 0, 0]} activeBar={{ fill: '#a855f7' }} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -266,107 +290,13 @@ Total = ${collateralTotal.toLocaleString('pt-BR')}`;
               </div>
             </div>
 
-            {/* GrÃ¡ficos de TS */}
-            {memberTSData && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* TS DiÃ¡rio - Area Chart */}
-                <div className="bg-gray-950 border border-white/5 rounded-sm p-6 shadow-xl">
-                  <h2 className="text-lg font-serif font-bold text-gray-300 mb-6 uppercase tracking-wider">TS Daily Activity</h2>
-                  <div className="flex items-center justify-center h-[200px] ">
-                    <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={[{ data: new Date().toISOString().slice(0,10), valor: memberTSData.daily_ts_calc || 0 }]}>
-                        <defs>
-                          <linearGradient id="colorTSDaily" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1c1917" />
-                        <XAxis dataKey="data" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                        <YAxis stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                        <RechartsTooltip
-                          contentStyle={{ backgroundColor: '#0c0a09', border: '1px solid #292524', borderRadius: '0px', color: '#e7e5e4', fontFamily: 'monospace' }}
-                          itemStyle={{ color: '#eab308' }}
-                          labelStyle={{ color: '#78716c' }}
-                        />
-                        <Area type="monotone" dataKey="valor" stroke="#eab308" fillOpacity={1} fill="url(#colorTSDaily)" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* TS Semanal - Bar Chart */}
-                <div className="bg-gray-950 border border-white/5 rounded-sm p-6 shadow-xl">
-                  <h2 className="text-lg font-serif font-bold text-gray-300 mb-6 uppercase tracking-wider">TS Weekly Summary</h2>
-                  <div className="flex items-center justify-center h-[200px] ">
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={[{ semana: "Current", total: memberTSData.weekly_ts }]}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1c1917" />
-                        <XAxis dataKey="semana" stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                        <YAxis stroke="#44403c" tick={{ fontSize: 10, fontFamily: 'monospace' }} />
-                        <RechartsTooltip
-                          contentStyle={{ backgroundColor: '#0c0a09', border: '1px solid #292524', borderRadius: '0px', color: '#e7e5e4', fontFamily: 'monospace' }}
-                          itemStyle={{ color: '#eab308' }}
-                          labelStyle={{ color: '#78716c' }}
-                        />
-                        <Bar dataKey="total" fill="#eab308" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* MÃ©tricas de TS */}
-            {memberTSData && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">TS Today</h3>
-                    <p className="text-3xl font-black text-purple-500 drop-shadow-[0_0_10px_rgba(168,85,247,0.3)]">
-                      +{(memberTSData.daily_ts_calc || 0).toLocaleString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-white/20 transition-colors relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-gray-500/10 blur-[30px] rounded-full"></div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Weekly TS</h3>
-                    <p className="text-3xl font-bold text-white font-serif">
-                      {memberTSData.weekly_ts.toLocaleString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-white/20 transition-colors relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-gray-500/10 blur-[30px] rounded-full"></div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">All Time TS</h3>
-                    <p className="text-3xl font-bold text-gray-300 font-serif">
-                      {memberTSData.all_time_ts.toLocaleString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-stone-900 to-black border border-white/5 rounded-sm p-6 shadow-lg hover:border-purple-900/30 transition-colors relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-purple-900/10 blur-[30px] rounded-full"></div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Gang TS</h3>
-                    <p className="text-3xl font-bold text-white font-serif">
-                      {memberTSData.clan_weekly_ts.toLocaleString('pt-BR')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </>
         ) : (
-          <div className="flex items-center justify-center h-40 text-gray-600 font-serif uppercase tracking-widest">
-            {selectedNickJogo ? 'No data for this member.' : 'Select member to view data.'}
+          <div className="text-center py-20 text-gray-500 font-serif tracking-widest uppercase">
+            User not tracked by system.
           </div>
         )}
+
       </div>
     </div>
   );

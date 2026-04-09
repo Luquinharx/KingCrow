@@ -125,21 +125,8 @@ export function useClanData() {
         const weeklyLoot = Math.max(val.weekly_loots || 0, val.clan_weekly_loots || 0);
         const dailyTS = dailyTSRecord;
 
-        // Rank rule inside the app as per user instructions
-        // We calculate internally. Rule: skip Gate Soldier, maybe use the same as Python without Gate Soldier?
-        // Actually user said: "Campos de rank e streak devem ser calculados internamente."
-        let months = 0;
-        if (val.last_clan_join) {
-           const joinDate = new Date(val.last_clan_join);
-           months = Math.floor((new Date().getTime() - joinDate.getTime()) / (30 * 24 * 60 * 60 * 1000));
-        }
-        if (isNaN(months)) months = 0;
-
-        let rank = "Street Cleaner";
-        const score = (months * 7000000) + ((clanAllTime / 1000) * 500000) + currentTS;
-        if (score >= 40000000) rank = "Blade Master";
-        else if (score >= 15000000) rank = "Guardian";
-        else rank = "Street Cleaner"; // Skipped Gate Soldier (score >= 1000000) as requested!
+        // primeiro rank - hj ele é calculado vamos cancelar ele ser calculado e pegar direto da base de dados q o scrap ja tras.
+        const rank = val.rank || "Nest Crows";
 
         out.push({
           username: val.username || u,
@@ -147,7 +134,7 @@ export function useClanData() {
           clanAllTime: clanAllTime,
           dailyLoot: dailyLoot,
           dailyTS: dailyTS,
-          weeklyToDate: weeklyLoot,
+          weeklyToDate: val.weekly_loots || 0,
           weeklyValues: [weeklyLoot],
           pct: '0%',
           pctNum: 0,

@@ -85,10 +85,10 @@ def verify_db():
 
 
 def date_key_for_now():
-    """O 'dia' começa às 09:02 de Brasília.
-    Coletas antes das 09:02 ainda pertencem ao dia anterior."""
+    """O 'dia' começa às 08:00 de Brasília.
+    Coletas antes das 08:00 ainda pertencem ao dia anterior."""
     now = datetime.now(tz=BRAZIL_TZ)
-    cutoff = now.replace(hour=9, minute=2, second=0, microsecond=0)
+    cutoff = now.replace(hour=8, minute=0, second=0, microsecond=0)
     if now < cutoff:
         day = (now - timedelta(days=1)).date()
     else:
@@ -299,9 +299,14 @@ def scrape_and_push():
 if __name__ == "__main__":
     scheduler = BlockingScheduler()
     # roda a cada hora no minuto 02 (ex.: 00:02, 01:02, 02:02...) horário de Brasília
-    trigger = CronTrigger(minute=2, timezone=BRAZIL_TZ)
-    scheduler.add_job(scrape_and_push, trigger)
-    logging.info("Agendado: toda hora no minuto 02 (America/Sao_Paulo). Iniciando scheduler...")
+    trigger_hourly = CronTrigger(minute=2, timezone=BRAZIL_TZ)
+    # garante um snapshot as 07:59 antes da virada do dia
+    trigger_end_of_day = CronTrigger(hour=7, minute=59, timezone=BRAZIL_TZ)
+    
+    scheduler.add_job(scrape_and_push, trigger_hourly)
+    scheduler.add_job(scrape_and_push, trigger_end_of_day)
+    
+    logging.info("Agendado: toda hora no minuto 02 e fechamento diário as 07:59 (America/Sao_Paulo). Iniciando scheduler...")
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
