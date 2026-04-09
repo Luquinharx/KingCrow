@@ -62,22 +62,6 @@ export function useClanData() {
       const dd = String(adjustedDate.getDate()).padStart(2, '0');
       const todayStr = `${yyyy}-${mm}-${dd}`;
 
-      // A base diária (8 AM) é capturada pela snapshot do final do "dia anterior"
-      const yesterday = new Date(adjustedDate.getTime() - 24 * 60 * 60 * 1000);
-      const yY = yesterday.getFullYear();
-      const yM = String(yesterday.getMonth() + 1).padStart(2, '0');
-      const yD = String(yesterday.getDate()).padStart(2, '0');
-      const yesterdayStr = `${yY}-${yM}-${yD}`;
-
-      // Calcula inicio da semana (segunda-feira)
-      const dayOfWeek = adjustedDate.getDay();
-      const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0 is Sunday
-      const mondayDate = new Date(adjustedDate.getTime() - diffToMonday * 24 * 60 * 60 * 1000);
-      const mY = mondayDate.getFullYear();
-      const mM = String(mondayDate.getMonth() + 1).padStart(2, '0');
-      const mD = String(mondayDate.getDate()).padStart(2, '0');
-      const weekStr = `${mY}-${mM}-${mD}`;
-
       // Fetches paralelos
       const [profRes, dailyRes] = await Promise.all([
         fetch(`${FIREBASE_URL}/profiles.json`).catch(() => null),
@@ -108,7 +92,6 @@ export function useClanData() {
 
         const currentAll = val.all_time_loots || 0;
         const clanAllTime = val.all_time_clan_loots || 0;
-        const currentTS = val.all_time_ts || 0;
         const currentTotalExp = val.total_exp || 0;
 
         const dbUserKey = encodeURIComponent(val.username || u);
