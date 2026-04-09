@@ -79,15 +79,14 @@ export function useClanData() {
       const weekStr = `${mY}-${mM}-${mD}`;
 
       // Fetches paralelos
-      const [profRes, dailyRes, _weeklyRes] = await Promise.all([
+      const [profRes, dailyRes] = await Promise.all([
         fetch(`${FIREBASE_URL}/profiles.json`).catch(() => null),
-        fetch(`${FIREBASE_URL}/daily/${yesterdayStr}.json`).catch(() => null),
-        fetch(`${FIREBASE_URL}/weekly/${weekStr}.json`).catch(() => null)
+        fetch(`${FIREBASE_URL}/daily.json`).catch(() => null)
       ]);
 
       const profiles = profRes && profRes.ok ? await profRes.json() : {};
-      const daily = dailyRes && dailyRes.ok ? await dailyRes.json() : {};
-      // const weekly = weeklyRes && weeklyRes.ok ? await weeklyRes.json() : {};
+      const dailyData = dailyRes && dailyRes.ok ? await dailyRes.json() : {};
+      const dailyDates = Object.keys(dailyData || {}).sort();
 
       if (!profiles || profiles.error) {
         setData([]);
@@ -98,7 +97,7 @@ export function useClanData() {
       const users = Object.keys(profiles);
       const out: MemberData[] = [];
       let globalCollectedAt = '';
-      
+
       users.forEach(u => {
         const val = profiles[u];
         if (!val) return;
@@ -110,21 +109,46 @@ export function useClanData() {
         const currentAll = val.all_time_loots || 0;
         const clanAllTime = val.all_time_clan_loots || 0;
         const currentTS = val.all_time_ts || 0;
+        const currentTotalExp = val.total_exp || 0;
 
-        // Baselines
-        const dailyBaseline = daily && daily[u] ? daily[u] : val;
-        // const weeklyBaseline = weekly && weekly[u] ? weekly[u] : val;
+        const dbUserKey = encodeURIComponent(val.username || u);
 
-        const baselineLoot = daily && daily[u] ? (daily[u].alltimeloot || daily[u].all_time_loots || 0) : currentAll;
-        const dailyLoot = Math.max(0, currentAll - baselineLoot);
-        const dailyTSRecord = Math.max(0, currentTS - (dailyBaseline.all_time_ts || 0));
-        
-        // Scrap handles weekly info but users wanted native calculation? User said "Diretamente do scraping" 
-        // For Dash Loot: `Weekly Loot` -> "Obtido diretamente do scraping"
-        // But if scraping only has total all_time_loots now? Wait, scraping has `weekly_loots` and `clan_weekly_ts` etc!
+        // Retroactive baseline search (avoiding legacy missing data issues)
+        let baselineLoot: number | null = null;
+        let baselineExp: number | null = null;
+
+        for (let i = dailyDates.length - 1; i >= 0; i--) {
+            const snap = dailyData[dailyDates[i]]?.[dbUserKey];
+            if (snap) {
+                if (baselineLoot === null) {
+                    baselineLoot = snap.alltimeloot !== undefined ? snap.alltimeloot : (snap.all_time_loots !== undefined ? snap.all_time_loots : null);
+                }
+                if (baselineExp === null && snap.total_exp !== undefined) {
+                    baselineExp = snap.total_exp;
+                }
+                if (baselineLoot !== null && baselineExp !== null) {
+                    break;
+                }
+            }
+        }
+
+        let dailyLoot = 0;
+        if (baselineLoot !== null) {
+            dailyLoot = Math.max(0, currentAll - baselineLoot);
+        } else {
+            // New user, show 0 instead of their entire life history on their first tracking day
+            dailyLoot = 0;
+        }
+
+        let dailyTS = 0;
+        if (baselineExp !== null) {
+            dailyTS = Math.max(0, currentTotalExp - baselineExp);
+        } else {
+            dailyTS = 0;
+        }
+
+        // Scrap handles weekly info
         const weeklyLoot = Math.max(val.weekly_loots || 0, val.clan_weekly_loots || 0);
-        const dailyTS = dailyTSRecord;
-
         // primeiro rank - hj ele é calculado vamos cancelar ele ser calculado e pegar direto da base de dados q o scrap ja tras.
         const rank = val.rank || "Nest Crows";
 
