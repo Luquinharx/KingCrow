@@ -90,30 +90,38 @@ export function useClanMemberData(username: string | undefined) {
       const dates = Object.keys(dailyData || {}).sort();
       let dailyLoot = 0;
       let dailyTS = 0;
-      
-      const lastDailySnapshotStr = dates.length > 0 ? dailyData[dates[dates.length - 1]]?.[dbUser] : null;
-      if (lastDailySnapshotStr) {
-         const baselineLoot = lastDailySnapshotStr.alltimeloot || lastDailySnapshotStr.all_time_loots || 0;
-         dailyLoot = Math.max(0, allTimeLootsUser - baselineLoot);
-         
-         // Fix pra TS Diário: Procurar o último snapshot que tenha total_exp salvo
-         let baselineExp = null;
-         for (let i = dates.length - 1; i >= 0; i--) {
-             const snap = dailyData[dates[i]]?.[dbUser];
-             if (snap && snap.total_exp !== undefined) {
-                 baselineExp = snap.total_exp;
-                 break;
-             }
-         }
-         
-         if (baselineExp !== null) {
-            dailyTS = Math.max(0, currentTotalExp - baselineExp);
-         } else {
-            dailyTS = 0; // Se não tem histórico com exp (ex: antes do scraper novo), mostra 0.
-         }
+
+      let baselineLoot = null;
+      let baselineExp = null;
+
+      // Buscar retroativamente o último snapshot válido para o usuário
+      for (let i = dates.length - 1; i >= 0; i--) {
+          const snap = dailyData[dates[i]]?.[dbUser];
+          if (snap) {
+              if (baselineLoot === null) {
+                  baselineLoot = snap.alltimeloot !== undefined ? snap.alltimeloot : (snap.all_time_loots !== undefined ? snap.all_time_loots : 0);
+              }
+              if (baselineExp === null && snap.total_exp !== undefined) {
+                  baselineExp = snap.total_exp;
+              }
+              if (baselineLoot !== null && baselineExp !== null) {
+                  break;
+              }
+          }
+      }
+
+      if (baselineLoot !== null) {
+          dailyLoot = Math.max(0, allTimeLootsUser - baselineLoot);
       } else {
-         dailyLoot = allTimeLootsUser;
-         dailyTS = 0;
+          // Se não há histórico do membro (primeiro dia no sistema), 
+          // não inflar seu ganho diário creditando 100% de seus pontos de toda a vida. Mostrar 0.
+          dailyLoot = 0;
+      }
+
+      if (baselineExp !== null) {
+          dailyTS = Math.max(0, currentTotalExp - baselineExp);
+      } else {
+          dailyTS = 0;
       }
 
       // Compile daily history from daily nodes
