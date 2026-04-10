@@ -7,15 +7,11 @@ import pytz
 import requests
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
-from dotenv import load_dotenv
-
-# Carrega variáveis do arquivo .env (caso exista)
-load_dotenv()
 
 # Config
 CLAN_URL = "https://www.dfprofiler.com/clan/view/1405"
 BASE_URL = "https://www.dfprofiler.com"
-FIREBASE_DB_URL = os.getenv("FIREBASE_DB_URL", "https://your-firebase-db.firebaseio.com/")
+FIREBASE_DB_URL = "https://dead-bb-default-rtdb.firebaseio.com"
 USER_AGENT = "Mozilla/5.0 (compatible; scraper/3.0)"
 BRAZIL_TZ = pytz.timezone("America/Sao_Paulo")
 
