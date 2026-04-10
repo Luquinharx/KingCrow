@@ -7,6 +7,10 @@ import pytz
 import requests
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
+from dotenv import load_dotenv
+
+# Carrega variáveis do arquivo .env (caso exista)
+load_dotenv()
 
 # Config
 CLAN_URL = "https://www.dfprofiler.com/clan/view/1405"
@@ -111,7 +115,14 @@ def scrape_and_push():
         
         profiles_data[safe_username_key] = user_data
 
-    requests.put(FIREBASE_DB_URL.rstrip("/") + "/profiles.json", json=profiles_data, timeout=20)
+    # Tenta salvar no Firebase e avisa caso de erro (ex: URL errada, permissão negada)
+    prof_url = FIREBASE_DB_URL.rstrip("/") + "/profiles.json"
+    try:
+        r_prof = requests.put(prof_url, json=profiles_data, timeout=20)
+        r_prof.raise_for_status()
+        logging.info(f"Salvo com sucesso: {len(profiles_data)} perfis no Firebase.")
+    except Exception as e:
+        logging.error(f"Erro CRITICO ao salvar perfis no Firebase ({prof_url}): {e}")
     
     adjusted_time = datetime.now(tz=BRAZIL_TZ) - timedelta(hours=8)
     today_str = adjusted_time.strftime("%Y-%m-%d")
