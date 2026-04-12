@@ -162,12 +162,12 @@ if __name__ == "__main__":
     from apscheduler.triggers.cron import CronTrigger
     scrape_and_push()
     scheduler = BlockingScheduler()
-    # Executa a cada 10 minutos terminando em 2 (ex: 00:02, 00:12, 00:22, etc)
-    trigger_10min = CronTrigger(minute='2,12,22,32,42,52', timezone=BRAZIL_TZ)
-    # Garante o snapshot de fechamento do dia as 07:53
-    trigger_end_of_day = CronTrigger(hour=7, minute=53, timezone=BRAZIL_TZ)
+    # Executa a cada 10 minutos cravados paras as viradas de hora e dia (00, 10, 20... incluindo 08:00)
+    trigger_10min = CronTrigger(minute='0,10,20,30,40,50', timezone=BRAZIL_TZ)
+    # Garante o snapshot de fechamento do dia as 07:59, cravando o máximo de pontos para o dia anterior
+    trigger_end_of_day = CronTrigger(hour=7, minute=59, timezone=BRAZIL_TZ)
     
     scheduler.add_job(scrape_and_push, trigger_10min)
     scheduler.add_job(scrape_and_push, trigger_end_of_day)
-    logging.info("Agendado: a cada 10 min (x:02, x:12...) e fechamento diário as 07:53.")
+    logging.info("Agendado: a cada 10 min (0, 10, 20...) e fechamento diário às 07:59.")
     scheduler.start()

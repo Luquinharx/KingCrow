@@ -14,7 +14,7 @@ export default function Roleta() {
   const { config } = useCasinoConfig();
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<typeof config.prizes[0] | null>(null);
-  const [slots, setSlots] = useState(['ÔØô', 'ÔØô', 'ÔØô']);
+  const [slots, setSlots] = useState(['ï¿½ï¿½ï¿½', 'ï¿½ï¿½ï¿½', 'ï¿½ï¿½ï¿½']);
   
   const [girosUsados, setGirosUsados] = useState(0);
   const [historico, setHistorico] = useState<{ premio: string; data: string; entregue: boolean }[]>([]);
@@ -42,17 +42,15 @@ export default function Roleta() {
 
   const { startOfPrizeWeek } = getPreviousWeekRange();
 
-  // Loot Reference
-  const lootReference = (stats?.weeklyValues && stats.weeklyValues.length >= 2) 
-      ? stats.weeklyValues[stats.weeklyValues.length - 2] 
-      : 0;
+// Loot Reference uses the current week so spins unlock as soon as goal is hit
+    const lootReference = stats?.weeklyToDate || 0;
 
   // Rule: Score at least 5k loots to qualify. Max 1 spin per week.
   const isQualified = lootReference >= 5000;
-  const weeklyTotal = isQualified ? 1 : 0; // Quantos giros semanais (gr+ítis) s+úo poss+¡veis
+  const weeklyTotal = isQualified ? 1 : 0; // Quantos giros semanais (gr+ï¿½tis) s+ï¿½o poss+ï¿½veis
   const extraSpins = profile?.extraSpins || 0; // Giros manuais extras
 
-  // carregar giros j+í usados NESTA semana de premia+º+úo
+  // carregar giros j+ï¿½ usados NESTA semana de premia+ï¿½+ï¿½o
   useEffect(() => {
     if (!profile?.userId) return;
     async function load() {
@@ -100,7 +98,7 @@ export default function Roleta() {
     if (spinning || girosDisponiveis <= 0 || !profile?.userId) return;
     setSpinning(true);
     setResult(null);
-    setSlots(['­ƒÄ¦', '­ƒÄ¦', '­ƒÄ¦']);
+    setSlots(['ï¿½ï¿½Ä¦', 'ï¿½ï¿½Ä¦', 'ï¿½ï¿½Ä¦']);
 
     // Weighted Random Selection
     const rand = Math.random() * 100;
@@ -139,7 +137,7 @@ export default function Roleta() {
         entregue: true,
       });
 
-      // Se usou um giro extra (porque n+úo tinha mais semanais ou n+úo era qualificado), debitar
+      // Se usou um giro extra (porque n+ï¿½o tinha mais semanais ou n+ï¿½o era qualificado), debitar
       const hasWeeklyAvailable = weeklyTotal > girosUsados;
       if (!hasWeeklyAvailable && extraSpins > 0) {
         await updateDoc(doc(db, 'usuarios', profile.userId), {
@@ -171,7 +169,7 @@ export default function Roleta() {
                 <span className="text-yellow-600">Blood</span> Slot
               </h1>
               <p className="text-gray-500 text-sm font-serif tracking-wide uppercase mt-1">
-                One spin per week ÔÇó Qualification: 5k+ Loot
+                One spin per week ï¿½ï¿½ï¿½ Qualification: 5k+ Loot
               </p>
             </div>
           </div>
@@ -273,7 +271,7 @@ export default function Roleta() {
             </div>
         </div>
 
-        {/* Hist+¦rico */}
+        {/* Hist+ï¿½rico */}
         {historico.length > 0 && (
           <div className="bg-black/80 border border-white/10 rounded-sm overflow-hidden backdrop-blur-md">
             <div className="px-6 py-5 border-b border-white/10 bg-yellow-950/10">

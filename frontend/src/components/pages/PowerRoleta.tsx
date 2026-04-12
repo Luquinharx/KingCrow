@@ -191,7 +191,7 @@ export default function PowerRoleta() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-gray-950 border border-white/5 rounded-lg p-5 text-center shadow-2xl relative overflow-hidden group hover:border-purple-500/30 transition-colors">
             <div className="absolute top-0 left-0 w-1 h-full bg-purple-600/50"></div>
-            <p className="text-xs text-gray-500 uppercase tracking-widest font-black">Last Week Loot</p>
+              <p className="text-xs text-gray-500 uppercase tracking-widest font-black">Weekly Loot</p>
             <p className="text-2xl font-black text-white mt-2 drop-shadow-md">
                 {weeklyLoot.toLocaleString('en-US')}
             </p>
