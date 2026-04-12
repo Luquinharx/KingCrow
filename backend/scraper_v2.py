@@ -11,7 +11,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 # Config
 CLAN_URL = "https://www.dfprofiler.com/clan/view/1405"
 BASE_URL = "https://www.dfprofiler.com"
-FIREBASE_DB_URL = "https://dead-bb-default-rtdb.firebaseio.com"
+FIREBASE_DB_URL = "https://dead-bb-default-rtdb.firebaseio.com/"
 USER_AGENT = "Mozilla/5.0 (compatible; scraper/3.0)"
 BRAZIL_TZ = pytz.timezone("America/Sao_Paulo")
 
@@ -74,10 +74,19 @@ def scrape_and_push():
         return
         
     members = []
-    for a in table.find_all("a", href=re.compile(r"/profile/view/")):
-        name = a.get_text(strip=True)
-        if name:
-            members.append({"username": name, "url": BASE_URL + a["href"]})
+    for tr in table.find_all("tr")[1:]:
+        tds = tr.find_all("td")
+        if len(tds) > 3:
+            a = tds[1].find("a", href=re.compile(r"/profile/view/"))
+            if a:
+                name = a.get_text(strip=True)
+                clan_rank = tds[3].get_text(strip=True)
+                if name:
+                    members.append({
+                        "username": name, 
+                        "url": BASE_URL + a["href"],
+                        "rank": clan_rank
+                    })
         
     now_iso = datetime.now(tz=BRAZIL_TZ).isoformat()
     profiles_data = {}
@@ -94,6 +103,7 @@ def scrape_and_push():
 
         user_data = {
             "username": m["username"],
+            "rank": m["rank"],
             "collected_at": now_iso,
 
             "weekly_ts": raw_weekly_ts,
