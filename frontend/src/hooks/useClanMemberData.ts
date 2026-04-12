@@ -70,8 +70,8 @@ export function useClanMemberData(username: string | undefined) {
     if (!username) { setStats(null); setLoading(false); return; }
 
     try {
-      const dbUser = encodeURIComponent(username);
-      const res = await fetch(FIREBASE_RT_URL + `/profiles/${dbUser}.json`);
+      const dbUser = encodeURIComponent(username).replace(/\./g, "%2E");
+      const res = await fetch(FIREBASE_RT_URL + `/profiles/${encodeURIComponent(dbUser)}.json`);
       const data = await res.json();
       if (!data || data.error) { setStats(null); setLoading(false); return; }
 

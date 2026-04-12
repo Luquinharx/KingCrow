@@ -72,7 +72,7 @@ export function useProfilesData() {
 
         const parsedProfiles: MemberProfile[] = Object.values(data).map((p: any) => {
           let dailyTSCalc = 0;
-          const dbUserKey = encodeURIComponent(p.username);
+          const dbUserKey = encodeURIComponent(p.username).replace(/\./g, "%2E");
           
           const baselineExp = getBaselineExp(dbUserKey);
           

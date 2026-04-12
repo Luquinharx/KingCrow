@@ -94,7 +94,7 @@ export function useClanData() {
         const clanAllTime = val.all_time_clan_loots || 0;
         const currentTotalExp = val.total_exp || 0;
 
-        const dbUserKey = encodeURIComponent(val.username || u);
+        const dbUserKey = encodeURIComponent(val.username || u).replace(/\./g, "%2E");
 
         // Retroactive baseline search (avoiding legacy missing data issues)
         let baselineLoot: number | null = null;
