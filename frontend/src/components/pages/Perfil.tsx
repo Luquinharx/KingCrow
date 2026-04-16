@@ -4,7 +4,7 @@ import { db } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useClanMemberData } from '../../hooks/useClanMemberData';
 import { useFirestoreClanData } from '../../hooks/useFirestoreClanData';
-import { useProfilesData } from '../../hooks/useProfilesData';
+import { useRankLookup } from '../../hooks/useRankLookup';
 import { RankBadge } from '../RankBadge';
 import { User, Edit3, Save, X, Check, Dna } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -18,7 +18,8 @@ interface RoletaEntry {
 
 export default function Perfil() {
   const { profile, refreshProfile } = useAuth();
-  const { profiles } = useProfilesData();
+  const { getRank } = useRankLookup();
+  // Não precisa mais do profiles diretamente
   const { stats } = useClanMemberData(profile?.nickJogo || undefined);
   const { data: firestoreData } = useFirestoreClanData(profile?.nickJogo || undefined);
   const [editing, setEditing] = useState(false);
@@ -77,6 +78,8 @@ export default function Perfil() {
       console.error('Erro ao marcar como entregue:', err);
     }
   }
+
+  const currentRank = getRank(profile?.nickJogo);
 
   if (!profile) {
     return (
@@ -158,7 +161,7 @@ export default function Perfil() {
             <div className="space-y-2">
               <label className="text-xs text-gray-600 uppercase tracking-widest font-bold">Scrap Rank</label>
               <div className="border-b border-white/5 pb-1">
-                <RankBadge rank={profiles.find(p => p.username === profile.nickJogo)?.rank || 'Street Cleaner'} />
+                <RankBadge rank={currentRank} />
               </div>
             </div>
             <div className="space-y-2">
@@ -280,3 +283,4 @@ export default function Perfil() {
     </div>
   );
 }
+

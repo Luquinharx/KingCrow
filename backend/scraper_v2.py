@@ -191,3 +191,4 @@ if __name__ == "__main__":
     scheduler.add_job(scrape_and_push, trigger_end_of_day)
     logging.info("Agendado: a cada 10 min (0, 10, 20...) e fechamento diário às 07:59.")
     scheduler.start()
+

@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useClanData, type MemberData } from '../hooks/useClanData';
 import { useProfilesData } from '../hooks/useProfilesData';
+import { useRankLookup } from '../hooks/useRankLookup';
 import { Search, ArrowUpDown, ArrowUp, ArrowDown, Users, TrendingUp, Flame, CheckCircle2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
@@ -13,6 +14,7 @@ type SortKey = keyof MemberData | 'clanWeeklyLoot' | `week_`;
 export default function Dashboard() {
   const { data, loading, error, latestCollectedAt, updatedCount, totalCount } = useClanData();
   const { profiles } = useProfilesData();
+  const { getRank } = useRankLookup();
 
   function formatCollectedAt(iso: string): string {
     if (!iso) return 'Ã¢â‚¬â€';
@@ -76,8 +78,13 @@ export default function Dashboard() {
       const aSortKeyStr = String(sortKey);
       
       if (aSortKeyStr === 'username' || aSortKeyStr === 'rank') {
-         av = String(a[aSortKeyStr as keyof MemberData] || "").toLowerCase();
-         bv = String(b[aSortKeyStr as keyof MemberData] || "").toLowerCase();
+         if (aSortKeyStr === 'rank') {
+           av = getRank(a.username).toLowerCase();
+           bv = getRank(b.username).toLowerCase();
+         } else {
+           av = String(a[aSortKeyStr as keyof MemberData] || "").toLowerCase();
+           bv = String(b[aSortKeyStr as keyof MemberData] || "").toLowerCase();
+         }
          return sortDesc ? (av < bv ? 1 : av > bv ? -1 : 0) : (av > bv ? 1 : av < bv ? -1 : 0);
       } else if (aSortKeyStr === 'currentAll') {
         av = Number(profileA?.all_time_loots || a.currentAll || 0);
@@ -102,7 +109,7 @@ export default function Dashboard() {
     });
 
     return result;
-  }, [dedupedData, search, sortKey, sortDesc, filterMode, profiles]);
+  }, [dedupedData, search, sortKey, sortDesc, filterMode, profiles, getRank]);
 
   const totalPages = Math.ceil(filteredAndSortedData.length / itemsPerPage);
   const paginatedData = filteredAndSortedData.slice(
@@ -336,7 +343,7 @@ export default function Dashboard() {
                   const profile = profiles.find((p) => p.username.toLowerCase() === r.username.toLowerCase());
                   
                   const username = r.username;
-                  const rank = r.rank;
+                  const rank = getRank(username);
                   const dailyLoot = Number(r.dailyLoot || 0);
                   const rawWeeklyLoot = Number(profile?.weekly_loots || r.weeklyToDate || 0);
                   const rawClanWeeklyLoot = Number(profile?.clan_weekly_loots || 0);

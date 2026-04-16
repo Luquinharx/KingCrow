@@ -1,5 +1,45 @@
 @import "tailwindcss";
 
+@theme {
+  --color-yellow-50: #ecfeff;
+  --color-yellow-100: #cffafe;
+  --color-yellow-200: #a5f3fc;
+  --color-yellow-300: #67e8f9;
+  --color-yellow-400: #22d3ee;
+  --color-yellow-500: #06b6d4;
+  --color-yellow-600: #0891b2;
+  --color-yellow-700: #0e7490;
+  --color-yellow-800: #155e75;
+  --color-yellow-900: #164e63;
+  --color-yellow-950: #082f49;
+
+  --color-amber-50: #ecfeff;
+  --color-amber-100: #cffafe;
+  --color-amber-200: #a5f3fc;
+  --color-amber-300: #67e8f9;
+  --color-amber-400: #22d3ee;
+  --color-amber-500: #06b6d4;
+  --color-amber-600: #0891b2;
+  --color-amber-700: #0e7490;
+  --color-amber-800: #155e75;
+  --color-amber-900: #164e63;
+  --color-amber-950: #082f49;
+
+  --color-orange-500: #06b6d4;
+  --color-orange-600: #0891b2;
+  --color-orange-700: #0e7490;
+  --color-orange-800: #155e75;
+  --color-orange-900: #164e63;
+  --color-red-500: #06b6d4;
+  --color-red-600: #0891b2;
+  --color-red-700: #0e7490;
+  --color-red-800: #155e75;
+  --color-red-900: #164e63;
+  --color-emerald-500: #22d3ee;
+  --color-emerald-600: #06b6d4;
+  --color-emerald-700: #0891b2;
+}
+
 @keyframes pulse-slow {
   0%, 100% { opacity: 0.1; }
   50% { opacity: 0.2; }
@@ -12,7 +52,7 @@
 
 @layer base {
   body {
-    @apply bg-black text-gray-300;
+    @apply bg-[#020712] text-gray-100;
     font-family: 'Nunito', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -25,7 +65,7 @@
   
   /* Modern Global Border Radius overrides for a super smooth UI */
   .rounded-sm, .rounded, .rounded-md, .rounded-lg, .rounded-xl {
-    @apply rounded-[2rem] backdrop-blur-2xl border border-white/10;
+    @apply rounded-[2rem] backdrop-blur-2xl border border-cyan-300/20;
   }
   
   /* Modern soft Glassmorphism Shadows */
@@ -34,15 +74,15 @@
   }
   
   .bg-black {
-    @apply bg-[#030303];
+    @apply bg-[#020712];
   }
 
   .bg-gray-950 {
-    @apply bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5;
+    @apply bg-[#06101f]/85 backdrop-blur-xl border-cyan-200/10;
   }
   
   .bg-gray-900 {
-    @apply bg-[#15151a]/80 backdrop-blur-xl;
+    @apply bg-[#0b1728]/80 backdrop-blur-xl;
   }
 }
 
@@ -61,4 +101,3 @@
 .animate-subtle-drift {
     animation: subtle-drift 10s ease-in-out infinite alternate;
 }
-

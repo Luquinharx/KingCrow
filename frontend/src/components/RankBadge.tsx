@@ -1,12 +1,14 @@
 import { cn } from '../lib/utils';
 import { Shield, Swords, Star, Circle, User } from 'lucide-react';
+import { canonicalizeRank } from '../lib/rank';
 
 export function RankBadge({ rank }: { rank: string }) {
+  const normalizedRank = canonicalizeRank(rank);
   let color = 'bg-gray-900 text-gray-400 ring-stone-800';
   let Icon = User;
-  let displayName = rank || 'Unknown';
+  let displayName = normalizedRank || 'Unknown';
 
-  switch (rank) {
+  switch (normalizedRank) {
     case 'KING':
     case 'K I N G':
       color = 'bg-yellow-500 text-yellow-950 ring-yellow-400 font-black';

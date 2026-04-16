@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useClanMemberData, useScrapedUsernames } from '../../hooks/useClanMemberData';
 import { useFirestoreClanData } from '../../hooks/useFirestoreClanData';
 import { useProfilesData } from '../../hooks/useProfilesData';
+import { useRankLookup } from '../../hooks/useRankLookup';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
 import { Search } from 'lucide-react';
 import { Tooltip as RechartsTooltip } from 'recharts';
@@ -41,9 +42,9 @@ export default function DashboardUser() {
   const { stats, loading: statsLoading } = useClanMemberData(selectedNickJogo || undefined);
   const { data: firestoreData, loading: firestoreLoading } = useFirestoreClanData(selectedNickJogo || undefined);
   const { profiles } = useProfilesData();
-  
-  // Buscar dados de TS do membro selecionado
+  const { getRank } = useRankLookup();
   const memberTSData = profiles.find(p => p.username.toLowerCase() === (selectedNickJogo?.toLowerCase() || ''));
+  const selectedRank = getRank(selectedNickJogo);
 
   // Calculo de Meses no Cla / Join Date
   let formattedJoinDate = 'Not found';
@@ -122,7 +123,7 @@ export default function DashboardUser() {
                     <p className="text-xs font-serif font-bold text-gray-500 uppercase tracking-widest">Member</p>
                     <p className="text-xl font-bold text-white font-serif truncate max-w-[200px]" title={stats.username}>{stats.username}</p>
                     <p className="text-[10px] text-gray-500 mt-1 uppercase">Join: {formattedJoinDate}</p>
-                    {memberTSData && <p className="text-[10px] text-purple-400 mt-1 uppercase font-bold">{memberTSData.rank}</p>}
+                    {selectedRank && <p className="text-[10px] text-purple-400 mt-1 uppercase font-bold">{selectedRank}</p>}
                   </div>
               </div>
 

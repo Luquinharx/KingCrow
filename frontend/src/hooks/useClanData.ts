@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { canonicalizeRank, safeDecodeURIComponent } from '../lib/rank';
+import { getOrCreateDailyLootBaseline, resolveDailyLootBaselineFromDailyData } from '../lib/dailyBaseline';
 
 const FIREBASE_URL = "https://dead-bb-default-rtdb.firebaseio.com";
 const REFRESH_MS = 5 * 60 * 1000;
@@ -86,6 +88,9 @@ export function useClanData() {
         const val = profiles[u];
         if (!val) return;
 
+        const username = safeDecodeURIComponent((val.username || u) as string).trim();
+        if (!username) return;
+
         if (val.collected_at && val.collected_at > globalCollectedAt) {
           globalCollectedAt = val.collected_at;
         }
@@ -94,22 +99,26 @@ export function useClanData() {
         const clanAllTime = val.all_time_clan_loots || 0;
         const currentTotalExp = val.total_exp || 0;
 
-        const dbUserKey = encodeURIComponent(val.username || u).replace(/\./g, "%2E");
+        const dbUserKey = encodeURIComponent(username).replace(/\./g, "%2E");
 
-        // Retroactive baseline search (avoiding legacy missing data issues)
-        let baselineLoot: number | null = null;
+        // Resolve loot baseline near the 08:00 reset (or closest snapshot when missing)
+        const baselineLoot = resolveDailyLootBaselineFromDailyData(
+          dailyData,
+          username,
+          dbUserKey,
+          currentAll,
+        );
+
+        // Retroactive baseline search for TS
         let baselineExp: number | null = null;
 
         for (let i = dailyDates.length - 1; i >= 0; i--) {
             const snap = dailyData[dailyDates[i]]?.[dbUserKey];
             if (snap) {
-                if (baselineLoot === null) {
-                    baselineLoot = snap.alltimeloot !== undefined ? snap.alltimeloot : (snap.all_time_loots !== undefined ? snap.all_time_loots : null);
-                }
                 if (baselineExp === null && snap.total_exp !== undefined) {
                     baselineExp = snap.total_exp;
                 }
-                if (baselineLoot !== null && baselineExp !== null) {
+                if (baselineExp !== null) {
                     break;
                 }
             }
@@ -119,8 +128,10 @@ export function useClanData() {
         if (baselineLoot !== null) {
             dailyLoot = Math.max(0, currentAll - baselineLoot);
         } else {
-            // New user, show 0 instead of their entire life history on their first tracking day
-            dailyLoot = 0;
+            // First time this member appears with no daily history in DB:
+            // create a local baseline so the next update starts diff from this point.
+            const baseline = getOrCreateDailyLootBaseline(username, currentAll);
+            dailyLoot = baseline.isNew ? 0 : Math.max(0, currentAll - baseline.baseline);
         }
 
         let dailyTS = 0;
@@ -132,11 +143,10 @@ export function useClanData() {
 
         // Scrap handles weekly info
         const weeklyLoot = Math.max(val.weekly_loots || 0, val.clan_weekly_loots || 0);
-        // primeiro rank - hj ele é calculado vamos cancelar ele ser calculado e pegar direto da base de dados q o scrap ja tras.
-        const rank = val.rank || "Nest Crows";
+        const rank = canonicalizeRank(val.rank || "");
 
         out.push({
-          username: val.username || u,
+          username,
           currentAll: currentAll,
           clanAllTime: clanAllTime,
           dailyLoot: dailyLoot,
