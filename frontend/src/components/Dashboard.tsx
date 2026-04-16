@@ -305,15 +305,29 @@ export default function Dashboard() {
         <div className="bg-gray-950 border border-white/10 rounded-sm shadow-2xl overflow-hidden backdrop-blur-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-gray-500 uppercase bg-black border-b border-white/10 font-serif tracking-widest">
+              <thead className="text-xs text-gray-300 uppercase bg-gradient-to-r from-black via-gray-950 to-black border-b border-white/10 font-serif tracking-widest">
                 <tr>
-                  <th className="px-6 py-5 font-bold cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('username')}>Username <SortIcon columnKey="username" /></th>
-                  <th className="px-6 py-5 font-bold text-center hidden md:table-cell cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('rank')}>Rank <SortIcon columnKey="rank" /></th>
-                  <th className="px-6 py-5 font-bold text-right cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('dailyLoot')}>Daily Loot <SortIcon columnKey="dailyLoot" /></th>
-                  <th className="px-6 py-5 font-bold text-right cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('weeklyToDate')}>Weekly Loot <SortIcon columnKey="weeklyToDate" /></th>
-                  <th className="px-6 py-5 font-bold text-right cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('clanWeeklyLoot')}>Gang Weekly Loot <SortIcon columnKey="clanWeeklyLoot" /></th>
-                  <th className="px-6 py-5 font-bold text-right cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('currentAll')}>All Time Loot <SortIcon columnKey="currentAll" /></th>
-                  <th className="px-6 py-5 font-bold text-right cursor-pointer hover:text-white transition-colors select-none group focus:outline-none" onClick={() => handleSort('streak')}>WK Streak <SortIcon columnKey="streak" /></th>
+                  <th className="px-4 py-4 font-extrabold cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none text-left whitespace-nowrap min-w-[120px]" onClick={() => handleSort('username')}>
+                    <span className="block md:inline">Username</span> <SortIcon columnKey="username" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-center hidden md:table-cell cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[80px]" onClick={() => handleSort('rank')}>
+                    <span className="block md:inline">Rank</span> <SortIcon columnKey="rank" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-right cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[90px]" onClick={() => handleSort('dailyLoot')}>
+                    <span className="block md:inline">Daily</span> <span className="hidden sm:inline">Loot</span> <SortIcon columnKey="dailyLoot" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-right cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[110px]" onClick={() => handleSort('weeklyToDate')}>
+                    <span className="block md:inline">Weekly</span> <span className="hidden sm:inline">Loot</span> <SortIcon columnKey="weeklyToDate" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-right cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[120px]" onClick={() => handleSort('clanWeeklyLoot')}>
+                    <span className="block md:inline">Gang</span> <span className="hidden sm:inline">Weekly Loot</span> <SortIcon columnKey="clanWeeklyLoot" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-right cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[120px]" onClick={() => handleSort('currentAll')}>
+                    <span className="block md:inline">All Time</span> <span className="hidden sm:inline">Loot</span> <SortIcon columnKey="currentAll" />
+                  </th>
+                  <th className="px-4 py-4 font-extrabold text-right cursor-pointer hover:text-yellow-400 transition-colors select-none group focus:outline-none whitespace-nowrap min-w-[90px]" onClick={() => handleSort('streak')}>
+                    <span className="block md:inline">WK</span> <span className="hidden sm:inline">Streak</span> <SortIcon columnKey="streak" />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 font-mono">

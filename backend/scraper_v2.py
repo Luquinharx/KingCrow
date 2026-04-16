@@ -7,6 +7,7 @@ import pytz
 import requests
 from bs4 import BeautifulSoup
 from apscheduler.schedulers.blocking import BlockingScheduler
+from snapshot_utils import save_snapshot, load_snapshot, compare_snapshots
 
 # Config
 CLAN_URL = "https://www.dfprofiler.com/clan/view/1405"
@@ -90,16 +91,28 @@ def scrape_and_push():
         
     now_iso = datetime.now(tz=BRAZIL_TZ).isoformat()
     profiles_data = {}
-    
+
+    # Carrega snapshot anterior para comparação
+    prev_snapshot = load_snapshot('profiles') or {}
+
     for m in members:
         pdata = parse_profile(m["url"])
         safe_username_key = requests.utils.requote_uri(m["username"]).replace(".", "%2E")
-        
+
         raw_weekly_ts = parse_int(pdata.get("weekly_ts", "0"))
         raw_clan_weekly_ts = parse_int(pdata.get("clan_weekly_ts", "0"))
-        
+
         raw_weekly_loots = parse_int(pdata.get("weekly_loots", "0"))
         raw_clan_weekly_loots = parse_int(pdata.get("clan_weekly_loots", "0"))
+
+        # Corrige daily loot: se o usuário não estava no snapshot anterior, dailyLoot = 0
+        prev_user = prev_snapshot.get(safe_username_key)
+        if prev_user is None:
+            daily_loot = 0
+        else:
+            prev_all_time_loot = prev_user.get("all_time_loots", 0)
+            curr_all_time_loot = parse_int(pdata.get("all_time_loots", "0"))
+            daily_loot = max(0, curr_all_time_loot - prev_all_time_loot)
 
         user_data = {
             "username": m["username"],
@@ -116,19 +129,26 @@ def scrape_and_push():
             "clan_weekly_loots": raw_clan_weekly_loots,
             "all_time_clan_loots": parse_int(pdata.get("all_time_clan_loots", "0")),
 
-            "last_clan_join": pdata.get("last_clan_join", "")
+            "last_clan_join": pdata.get("last_clan_join", ""),
+            "daily_loot": daily_loot
         }
-        
+
         profiles_data[safe_username_key] = user_data
 
-    # Tenta salvar no Firebase e avisa caso de erro (ex: URL errada, permissão negada)
+    # Salva snapshot local para backup
+    save_snapshot(profiles_data, 'profiles')
+
+    # Só envia para o Firebase se houve alteração
     prof_url = FIREBASE_DB_URL.rstrip("/") + "/profiles.json"
-    try:
-        r_prof = requests.put(prof_url, json=profiles_data, timeout=20)
-        r_prof.raise_for_status()
-        logging.info(f"Salvo com sucesso: {len(profiles_data)} perfis no Firebase.")
-    except Exception as e:
-        logging.error(f"Erro CRITICO ao salvar perfis no Firebase ({prof_url}): {e}")
+    if compare_snapshots(prev_snapshot, profiles_data):
+        try:
+            r_prof = requests.put(prof_url, json=profiles_data, timeout=20)
+            r_prof.raise_for_status()
+            logging.info(f"Salvo com sucesso: {len(profiles_data)} perfis no Firebase.")
+        except Exception as e:
+            logging.error(f"Erro CRITICO ao salvar perfis no Firebase ({prof_url}): {e}")
+    else:
+        logging.info("Nenhuma alteração detectada, não foi necessário atualizar o Firebase.")
     
     adjusted_time = datetime.now(tz=BRAZIL_TZ) - timedelta(hours=8)
     today_str = adjusted_time.strftime("%Y-%m-%d")
