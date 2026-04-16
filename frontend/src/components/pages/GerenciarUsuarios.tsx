@@ -5,12 +5,13 @@ import { initializeApp } from 'firebase/app';
 import { db } from '../../lib/firebase';
 import { useAuth, type UserProfile } from '../../hooks/useAuth';
 import { useScrapedUsernames } from '../../hooks/useClanMemberData';
-import { useProfilesData } from '../../hooks/useProfilesData';
+import { useRankLookup } from '../../hooks/useRankLookup';
 import { RankBadge } from '../RankBadge';
-import { Edit3, Trash2, Save, X, Search, UserPlus, Gift, Check, ShieldAlert, Loader2, Settings } from 'lucide-react';
+import { Edit3, Trash2, Save, X, Search, UserPlus, Gift, Check, ShieldAlert, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import CasinoSettings from './CasinoSettings';
 import PowerRouletteSettings from './PowerRouletteSettings';
+import { isSuperAdminEmail } from '../../lib/admin';
 
 const CARGOS = ['Leader', 'High Warden', 'Blade Master', 'Guardian', 'Gate Keeper', 'Street Cleaner'];
 
@@ -24,18 +25,19 @@ const secondaryApp = initializeApp({
 const secondaryAuth = getAuth(secondaryApp);
 
 export default function GerenciarUsuarios() {
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { usernames: scrapedNames } = useScrapedUsernames();
-  const { profiles } = useProfilesData();
+  const { getRank } = useRankLookup();
+    // Não precisa mais do profiles diretamente
 
-  const isSuperUser = profile?.email === 'bone.ak103@gmail.com';
+  const isSuperUser = isSuperAdminEmail(user?.email || profile?.email);
   const isOfficerOnly = profile?.cargo === 'Officer';
     const isHighLeader = profile?.cargo === 'High Warden';
     const isLeader = profile?.cargo === 'Leader' || isSuperUser || isOfficerOnly;
     const isAdmin = isLeader || isHighLeader;
 
     // Tabs
-    const [activeTab, setActiveTab] = useState<'members' | 'spins' | 'powerspins' | 'casino'>(isHighLeader ? 'spins' : 'members');
+    const [activeTab] = useState<'members' | 'spins' | 'powerspins' | 'casino'>('members');
   const [usuarios, setUsuarios] = useState<(UserProfile & { docId: string })[]>([]);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -61,8 +63,7 @@ export default function GerenciarUsuarios() {
   const [cadNick, setCadNick] = useState('');
   const [cadNickJogo, setCadNickJogo] = useState('');
   const [cadDiscord, setCadDiscord] = useState('');
-  const [cadDataEntrada, setCadDataEntrada] = useState('');
-  const [cadCargo, setCadCargo] = useState('Street Cleaner');
+  const [cadIsAdmin, setCadIsAdmin] = useState(false);
   const [cadError, setCadError] = useState('');
   const [cadSuccess, setCadSuccess] = useState('');
   const [cadLoading, setCadLoading] = useState(false);
@@ -257,8 +258,8 @@ export default function GerenciarUsuarios() {
         nick: cadNick,
         nickJogo: cadNickJogo,
         discord: cadDiscord,
-        dataEntrada: cadDataEntrada ? Timestamp.fromDate(new Date(cadDataEntrada + 'T00:00:00')) : Timestamp.now(),
-        cargo: cadCargo,
+        dataEntrada: Timestamp.now(),
+        cargo: cadIsAdmin ? 'Leader' : 'Street Cleaner',
         extraSpins: 0,
         powerSpins: 0,
         lootSemanal: 0,
@@ -268,7 +269,7 @@ export default function GerenciarUsuarios() {
       });
 
       setCadSuccess(`User "${cadNick}" successfully registered!`);
-      setCadEmail(''); setCadSenha(''); setCadNick(''); setCadNickJogo(''); setCadDiscord(''); setCadDataEntrada(''); setCadCargo('Member');
+      setCadEmail(''); setCadSenha(''); setCadNick(''); setCadNickJogo(''); setCadDiscord(''); setCadIsAdmin(false);
       await loadAll();
     } catch (err: any) {
       const code = err?.code || '';
@@ -315,10 +316,8 @@ export default function GerenciarUsuarios() {
     }
 
     if (sortConfig.key === 'rank') {
-      valA = profiles.find(p => p.username === a.nickJogo)?.rank || '';
-      valB = profiles.find(p => p.username === b.nickJogo)?.rank || '';
-      if (valA === 'Street Cleaner') valA = 'Z'; // Push missing ranks to bottom when sorting ASC
-      if (valB === 'Street Cleaner') valB = 'Z';
+    valA = getRank(a.nickJogo);
+    valB = getRank(b.nickJogo);
     }
 
     if (typeof valA === 'string' && typeof valB === 'string') {
@@ -384,45 +383,15 @@ export default function GerenciarUsuarios() {
 
 <div className="flex gap-2 bg-gray-900/50 p-1 rounded-sm border border-white/5 overflow-x-auto">
               {isLeader && (
-                <button
-                  onClick={() => setActiveTab('members')}
+                <span
                   className={cn(
-                      "px-6 py-2 rounded-sm text-sm uppercase tracking-widest font-bold transition-all whitespace-nowrap",
-                      activeTab === 'members' ? "bg-yellow-900/30 text-yellow-500 border border-yellow-900/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
+                    "px-6 py-2 rounded-sm text-sm uppercase tracking-widest font-bold transition-all whitespace-nowrap",
+                    activeTab === 'members' ? "bg-yellow-900/30 text-yellow-500 border border-yellow-900/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]" : "text-gray-500"
                   )}
                 >
-                    Members
-                </button>
+                  Members
+                </span>
               )}
-              <button
-                onClick={() => setActiveTab('spins')}
-                className={cn(
-                    "px-6 py-2 rounded-sm text-sm uppercase tracking-widest font-bold transition-all whitespace-nowrap",
-                    activeTab === 'spins' ? "bg-yellow-900/30 text-yellow-500 border border-yellow-900/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                )}
-              >
-                  Slot Spins
-              </button>
-              <button
-                onClick={() => setActiveTab('powerspins')}
-                className={cn(
-                    "px-6 py-2 rounded-sm text-sm uppercase tracking-widest font-bold transition-all whitespace-nowrap",
-                    activeTab === 'powerspins' ? "bg-amber-900/30 text-amber-500 border border-amber-900/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                )}
-              >
-                  Power Wheel Spins
-              </button>
-              <button
-                onClick={() => setActiveTab('casino')}
-                className={cn(
-                    "px-6 py-2 rounded-sm text-sm uppercase tracking-widest font-bold transition-all whitespace-nowrap",
-                    activeTab === 'casino' ? "bg-yellow-900/30 text-yellow-500 border border-yellow-900/50 shadow-[0_0_10px_rgba(234,179,8,0.2)]" : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                )}
-              >
-                  <span className="flex items-center gap-2">
-                    <Settings className="w-4 h-4" /> CASINO CONFIG
-                  </span>
-              </button>
           </div>
         </header>
 
@@ -514,16 +483,19 @@ export default function GerenciarUsuarios() {
                     placeholder="user#0000" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Enlistment Date</label>
-                    <input type="date" value={cadDataEntrada} onChange={e => setCadDataEntrada(e.target.value)} required
-                    className="w-full px-4 py-2 bg-gray-950 border border-white/10 rounded-sm text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm font-mono" />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Clearance Level (Rank)</label>
-                    <select value={cadCargo} onChange={e => setCadCargo(e.target.value)}
-                    className="w-full px-4 py-2 bg-gray-950 border border-white/10 rounded-sm text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm font-mono">
-                    {CARGOS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Admin Access</label>
+                    <button
+                      type="button"
+                      onClick={() => setCadIsAdmin(v => !v)}
+                      className={cn(
+                        "w-full px-4 py-2 border rounded-sm text-sm font-mono transition-colors text-left",
+                        cadIsAdmin
+                          ? "bg-emerald-950/20 border-emerald-900/40 text-emerald-400"
+                          : "bg-gray-950 border-white/10 text-gray-300 hover:border-yellow-500"
+                      )}
+                    >
+                      {cadIsAdmin ? 'YES - ADMIN' : 'NO - MEMBER'}
+                    </button>
                 </div>
                 <div className="flex items-end lg:col-span-1">
                     <button type="submit" disabled={cadLoading}
@@ -629,7 +601,7 @@ export default function GerenciarUsuarios() {
                                 </span>
                             </td>
                             <td className="px-6 py-3">
-                                <RankBadge rank={profiles.find(p => p.username === u.nickJogo)?.rank || 'Street Cleaner'} />
+                                <RankBadge rank={getRank(u.nickJogo)} />
                             </td>
                             <td className="px-6 py-3 text-center text-xs font-bold text-emerald-500">
                                 {u.extraSpins && u.extraSpins > 0 ? `+${u.extraSpins}` : <span className="text-gray-700">0</span>}
@@ -901,3 +873,4 @@ export default function GerenciarUsuarios() {
     </div>
   );
 }
+

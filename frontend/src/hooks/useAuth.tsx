@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { isSuperAdminEmail } from '../lib/admin';
 
 export interface UserProfile {
   userId: string;
@@ -44,14 +45,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const snap = await getDoc(doc(db, 'usuarios', u.uid));
     if (snap.exists()) {
       const data = snap.data() as UserProfile;
-      if (u.email === 'lucasmartinsa3009@gmail.com' && data.cargo !== 'Leader') {
+      if (isSuperAdminEmail(u.email) && data.cargo !== 'Leader') {
         const { updateDoc } = await import('firebase/firestore');
         await updateDoc(doc(db, 'usuarios', u.uid), { cargo: 'Leader' });
         data.cargo = 'Leader';
       }
       setProfile(data);
     } else {
-      setProfile(null);
+      if (isSuperAdminEmail(u.email)) {
+        setProfile({
+          userId: u.uid,
+          email: u.email || '',
+          nick: u.displayName || 'Super Admin',
+          nickJogo: '',
+          discord: '',
+          dataEntrada: new Date().toISOString(),
+          cargo: 'Leader',
+          lootSemanal: 0,
+          lootTotal: 0,
+          roletaDisponivel: 0,
+          extraSpins: 0,
+          powerSpins: 0,
+          criadoEm: new Date().toISOString(),
+        });
+      } else {
+        setProfile(null);
+      }
     }
   }
 
