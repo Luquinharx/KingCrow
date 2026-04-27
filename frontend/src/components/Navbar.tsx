@@ -1,7 +1,7 @@
 
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, User, Settings, LogOut, BarChart3, LogIn, Menu, X, Home, Table, Activity } from 'lucide-react';
+import { LayoutDashboard, User, Settings, LogOut, BarChart3, LogIn, Menu, X, Home, Table, Activity, ClipboardList } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
 import BrandLogo from './BrandLogo';
@@ -34,8 +34,12 @@ export default function Navbar() {
   const links = [
     ...publicLinks,
     ...(profile ? protectedLinks : []),
-    ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: Settings }] : []),
+    ...(isAdmin ? [
+      { to: '/admin', label: 'Admin', icon: Settings },
+      { to: '/admin-auditoria', label: 'Audit', icon: ClipboardList },
+    ] : []),
   ];
+  const displayName = profile?.nick || user?.displayName || user?.email || '';
 
   return (
     <nav className="bg-black/90 border-b border-cyan-400/20 sticky top-0 z-50 backdrop-blur-md">
@@ -79,10 +83,10 @@ export default function Navbar() {
 
             <div className="h-6 w-px bg-white/10 mx-2" />
 
-            {profile ? (
+            {user ? (
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-serif text-gray-300 hidden lg:block tracking-wider uppercase">
-                        {profile?.nick}
+                        {displayName}
                     </span>
                     <button
                     onClick={logout}
@@ -139,7 +143,7 @@ export default function Navbar() {
             ))}
             
             <div className="border-t border-white/10 my-2 pt-2">
-                {profile ? (
+                {user ? (
                     <button
                         onClick={() => { logout(); setIsOpen(false); }}
                         className="w-full text-left px-3 py-3 text-cyan-300 font-serif uppercase tracking-wider flex items-center gap-3"

@@ -68,12 +68,11 @@ function toLootNumber(value: unknown): number | null {
   return null;
 }
 
-function parseSnapshotLoot(snapshot: Record<string, unknown>): number | null {
-  const byOldField = toLootNumber(snapshot.alltimeloot);
-  if (byOldField !== null) return byOldField;
-
-  const byNewField = toLootNumber(snapshot.all_time_loots);
-  if (byNewField !== null) return byNewField;
+function parseSnapshotNumber(snapshot: Record<string, unknown>, fieldNames: string[]): number | null {
+  for (const fieldName of fieldNames) {
+    const value = toLootNumber(snapshot[fieldName]);
+    if (value !== null) return value;
+  }
 
   return null;
 }
@@ -112,6 +111,7 @@ function tryPushSnapshot(
   snapshotKey: string,
   snapshotValue: unknown,
   dateKey: string,
+  fieldNames: string[],
   hourKey?: string,
 ): void {
   if (!snapshotValue || typeof snapshotValue !== 'object') return;
@@ -120,7 +120,7 @@ function tryPushSnapshot(
   const snapshotUsername = normalizeUsername(getSnapshotUsername(snapshotKey, snapshot));
   if (!snapshotUsername || snapshotUsername !== targetUsername) return;
 
-  const value = parseSnapshotLoot(snapshot);
+  const value = parseSnapshotNumber(snapshot, fieldNames);
   if (value === null) return;
 
   const ts = parseSnapshotTimestamp(dateKey, snapshot, hourKey);
@@ -173,6 +173,22 @@ export function resolveDailyLootBaselineFromDailyData(
   encodedUsernameKey: string,
   currentAllLoot: number,
 ): number | null {
+  return resolveDailyValueBaselineFromDailyData(
+    dailyData,
+    username,
+    encodedUsernameKey,
+    currentAllLoot,
+    ['all_time_loots', 'alltimeloot'],
+  );
+}
+
+export function resolveDailyValueBaselineFromDailyData(
+  dailyData: DailyDataShape,
+  username: string,
+  encodedUsernameKey: string,
+  currentValue: number,
+  fieldNames: string[],
+): number | null {
   if (!dailyData || typeof dailyData !== 'object') return null;
 
   const targetUsername = normalizeUsername(username);
@@ -186,7 +202,7 @@ export function resolveDailyLootBaselineFromDailyData(
     const dayUsers = dayValue as Record<string, unknown>;
 
     if (Object.prototype.hasOwnProperty.call(dayUsers, encodedUsernameKey)) {
-      tryPushSnapshot(points, targetUsername, encodedUsernameKey, dayUsers[encodedUsernameKey], dateKey);
+      tryPushSnapshot(points, targetUsername, encodedUsernameKey, dayUsers[encodedUsernameKey], dateKey, fieldNames);
     }
 
     Object.entries(dayUsers).forEach(([snapshotKey, snapshotValue]) => {
@@ -199,18 +215,18 @@ export function resolveDailyLootBaselineFromDailyData(
           const hourUsers = hourUsersValue as Record<string, unknown>;
 
           if (Object.prototype.hasOwnProperty.call(hourUsers, encodedUsernameKey)) {
-            tryPushSnapshot(points, targetUsername, encodedUsernameKey, hourUsers[encodedUsernameKey], dateKey, hourKey);
+            tryPushSnapshot(points, targetUsername, encodedUsernameKey, hourUsers[encodedUsernameKey], dateKey, fieldNames, hourKey);
           }
 
           Object.entries(hourUsers).forEach(([hourSnapshotKey, hourSnapshotValue]) => {
             if (hourSnapshotKey === encodedUsernameKey) return;
-            tryPushSnapshot(points, targetUsername, hourSnapshotKey, hourSnapshotValue, dateKey, hourKey);
+            tryPushSnapshot(points, targetUsername, hourSnapshotKey, hourSnapshotValue, dateKey, fieldNames, hourKey);
           });
         });
         return;
       }
 
-      tryPushSnapshot(points, targetUsername, snapshotKey, snapshotValue, dateKey);
+      tryPushSnapshot(points, targetUsername, snapshotKey, snapshotValue, dateKey, fieldNames);
     });
   });
 
@@ -226,24 +242,24 @@ export function resolveDailyLootBaselineFromDailyData(
 
   let chosen: SnapshotPoint | null = null;
 
-  if (beforeOrAtReset.length > 0) {
-    chosen = beforeOrAtReset[beforeOrAtReset.length - 1];
-  } else if (afterReset.length > 0) {
+  if (afterReset.length > 0) {
     chosen = afterReset[0];
+  } else if (beforeOrAtReset.length > 0) {
+    chosen = beforeOrAtReset[beforeOrAtReset.length - 1];
   } else {
     chosen = points[points.length - 1];
   }
 
   if (!chosen) return null;
 
-  if (chosen.value === 0 && currentAllLoot > 0) {
+  if (chosen.value === 0 && currentValue > 0) {
     const beforeNonZero = beforeOrAtReset.filter((point) => point.value > 0);
     const afterNonZero = afterReset.filter((point) => point.value > 0);
 
-    if (beforeNonZero.length > 0) {
-      chosen = beforeNonZero[beforeNonZero.length - 1];
-    } else if (afterNonZero.length > 0) {
+    if (afterNonZero.length > 0) {
       chosen = afterNonZero[0];
+    } else if (beforeNonZero.length > 0) {
+      chosen = beforeNonZero[beforeNonZero.length - 1];
     }
   }
 

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import { initializeApp } from 'firebase/app';
+import { createUserWithEmailAndPassword, deleteUser, getAuth } from 'firebase/auth';
+import { get as dbGet, ref as dbRef, set as dbSet } from 'firebase/database';
+import { firebaseConfig, rtdb } from '../../lib/firebase';
+import { getApp, getApps, initializeApp } from 'firebase/app';
 import { UserPlus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
@@ -12,12 +12,20 @@ import Navbar from '../Navbar';
 const CARGOS = ['Member', 'Officer', 'Sub-Leader', 'Leader'];
 
 // Auth secundário para criar usuários sem deslogar o admin
-const secondaryApp = initializeApp({
-  apiKey: "AIzaSyA9E6Hrkbfnex1YvxJVplbf49RdEa8dcMc",
-  authDomain: "dead-bb.firebaseapp.com",
-  projectId: "dead-bb",
-}, 'secondary');
+const secondaryApp = getApps().some(app => app.name === 'secondary')
+  ? getApp('secondary')
+  : initializeApp(firebaseConfig, 'secondary');
 const secondaryAuth = getAuth(secondaryApp);
+
+const USER_EMAIL_FIELDS = ['email', 'emailAccess', 'authEmail', 'loginEmail', 'mail'];
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function getStoredEmail(data: Record<string, unknown>): string {
+  return USER_EMAIL_FIELDS.map(field => typeof data[field] === 'string' ? data[field] as string : '').find(Boolean) || '';
+}
 
 export default function Cadastro() {
   const { profile } = useAuth();
@@ -51,38 +59,59 @@ export default function Cadastro() {
     setError('');
     setLoading(true);
     setSuccess('');
-    try {
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
-      const uid = cred.user.uid;
-      // deslogar do auth secundário imediatamente
-      await secondaryAuth.signOut();
+    const emailToCreate = normalizeEmail(email);
+    let createdAuthUser: Awaited<ReturnType<typeof createUserWithEmailAndPassword>>['user'] | null = null;
 
-      await setDoc(doc(db, 'usuarios', uid), {
+    try {
+      const usersSnap = await dbGet(dbRef(rtdb, 'usuarios'));
+      const users = usersSnap.exists() ? usersSnap.val() as Record<string, Record<string, unknown>> : {};
+      const emailAlreadyInDatabase = Object.values(users).some(data => normalizeEmail(getStoredEmail(data)) === emailToCreate);
+
+      if (emailAlreadyInDatabase) {
+        setError('Este email ja existe no banco de usuarios.');
+        return;
+      }
+
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, emailToCreate, senha);
+      createdAuthUser = cred.user;
+      const uid = cred.user.uid;
+
+      await dbSet(dbRef(rtdb, `usuarios/${uid}`), {
         userId: uid,
-        email,
+        email: emailToCreate,
+        emailNormalized: emailToCreate,
         nick,
         nickJogo,
         discord,
-        dataEntrada: dataEntrada ? Timestamp.fromDate(new Date(dataEntrada + 'T00:00:00')) : Timestamp.now(),
+        dataEntrada: dataEntrada ? new Date(dataEntrada + 'T00:00:00').toISOString() : new Date().toISOString(),
         cargo,
         lootSemanal: 0,
         lootTotal: 0,
         roletaDisponivel: 0,
-        criadoEm: Timestamp.now(),
+        criadoEm: new Date().toISOString(),
       });
 
       setSuccess(`Usuário "${nick}" cadastrado com sucesso!`);
       setEmail(''); setSenha(''); setNick(''); setNickJogo(''); setDiscord(''); setDataEntrada(''); setCargo('Member');
     } catch (err: any) {
+      if (createdAuthUser) {
+        await deleteUser(createdAuthUser).catch((deleteError) => {
+          console.error('Erro ao desfazer usuario criado no Auth:', deleteError);
+        });
+      }
+
       const code = err?.code || '';
       if (code === 'auth/email-already-in-use') {
-        setError('Este email já está cadastrado.');
+        setError('Este email ja existe no Firebase Auth.');
       } else if (code === 'auth/weak-password') {
         setError('A senha deve ter pelo menos 6 caracteres.');
+      } else if (code === 'auth/invalid-email') {
+        setError('Email invalido.');
       } else {
         setError('Erro ao cadastrar. Tente novamente.');
       }
     } finally {
+      await secondaryAuth.signOut().catch(() => {});
       setLoading(false);
     }
   }

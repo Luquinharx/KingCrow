@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc, Timestamp, query, orderBy, limit } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { initializeApp } from 'firebase/app';
-import { db } from '../../lib/firebase';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, limit } from 'firebase/firestore';
+import { get as dbGet, ref as dbRef, remove as dbRemove, set as dbSet, update as dbUpdate } from 'firebase/database';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth, db, firebaseConfig, rtdb } from '../../lib/firebase';
 import { useAuth, type UserProfile } from '../../hooks/useAuth';
 import { useScrapedUsernames } from '../../hooks/useClanMemberData';
 import { useRankLookup } from '../../hooks/useRankLookup';
@@ -11,22 +11,141 @@ import { Edit3, Trash2, Save, X, Search, UserPlus, Gift, Check, ShieldAlert, Loa
 import { cn } from '../../lib/utils';
 import CasinoSettings from './CasinoSettings';
 import PowerRouletteSettings from './PowerRouletteSettings';
-import { isSuperAdminEmail } from '../../lib/admin';
+import { isAdminCargo, isSuperAdminEmail } from '../../lib/admin';
 
-const CARGOS = ['Leader', 'High Warden', 'Blade Master', 'Guardian', 'Gate Keeper', 'Street Cleaner'];
+const ACCESS_OPTIONS = ['Admin', 'Usuario'] as const;
+const USERS_LOAD_TIMEOUT_MS = 12000;
+const USER_EMAIL_FIELDS = ['email', 'emailAccess', 'authEmail', 'loginEmail', 'mail'];
 
 
-// Auth secundário para criar usuários sem deslogar o admin
-const secondaryApp = initializeApp({
-  apiKey: "AIzaSyA9E6Hrkbfnex1YvxJVplbf49RdEa8dcMc",
-  authDomain: "dead-bb.firebaseapp.com",
-  projectId: "dead-bb",
-}, 'secondary-admin');
-const secondaryAuth = getAuth(secondaryApp);
+function timeoutAfter<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeUserDoc(data: Partial<UserProfile> & Record<string, unknown>, docId: string, currentUserEmail = ''): UserProfile & { docId: string } {
+  const email = USER_EMAIL_FIELDS.map(field => stringValue(data[field]))
+    .find(Boolean)
+    || currentUserEmail;
+
+  return {
+    userId: stringValue(data.userId) || docId,
+    email,
+    nick: stringValue(data.nick) || stringValue(data.nickJogo) || email || docId,
+    nickJogo: stringValue(data.nickJogo),
+    discord: stringValue(data.discord),
+    dataEntrada: data.dataEntrada,
+    cargo: stringValue(data.cargo) || 'Street Cleaner',
+    lootSemanal: Number(data.lootSemanal) || 0,
+    lootTotal: Number(data.lootTotal) || 0,
+    roletaDisponivel: Number(data.roletaDisponivel) || 0,
+    extraSpins: Number(data.extraSpins) || 0,
+    powerSpins: Number(data.powerSpins) || 0,
+    criadoEm: data.criadoEm,
+    docId,
+  };
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function getStoredEmail(data: Record<string, unknown>): string {
+  return USER_EMAIL_FIELDS.map(field => stringValue(data[field])).find(Boolean) || '';
+}
+
+function getAccessLabel(cargo?: string | null): typeof ACCESS_OPTIONS[number] {
+  return isAdminCargo(cargo) ? 'Admin' : 'Usuario';
+}
+
+function accessToCargo(access: typeof ACCESS_OPTIONS[number]): string {
+  return access === 'Admin' ? 'Leader' : 'Street Cleaner';
+}
+
+function createUserProfilePayload(uid: string, email: string, form: {
+  nick: string;
+  nickJogo: string;
+  discord: string;
+  isAdmin: boolean;
+}) {
+  return {
+    userId: uid,
+    email,
+    emailNormalized: email,
+    nick: form.nick,
+    nickJogo: form.nickJogo,
+    discord: form.discord,
+    dataEntrada: new Date().toISOString(),
+    cargo: form.isAdmin ? 'Leader' : 'Street Cleaner',
+    extraSpins: 0,
+    powerSpins: 0,
+    lootSemanal: 0,
+    lootTotal: 0,
+    roletaDisponivel: 0,
+    criadoEm: new Date().toISOString(),
+  };
+}
+
+interface AuthRestUser {
+  uid: string;
+  idToken: string;
+}
+
+async function firebaseAuthRequest<T>(endpoint: string, payload: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:${endpoint}?key=${firebaseConfig.apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    const message = data?.error?.message || `HTTP_${res.status}`;
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
+async function createAuthUser(email: string, password: string): Promise<AuthRestUser> {
+  const data = await firebaseAuthRequest<{ localId: string; idToken: string }>('signUp', {
+    email,
+    password,
+    returnSecureToken: true,
+  });
+
+  return { uid: data.localId, idToken: data.idToken };
+}
+
+async function signInAuthUser(email: string, password: string): Promise<AuthRestUser> {
+  const data = await firebaseAuthRequest<{ localId: string; idToken: string }>('signInWithPassword', {
+    email,
+    password,
+    returnSecureToken: true,
+  });
+
+  return { uid: data.localId, idToken: data.idToken };
+}
+
+async function deleteAuthUser(idToken: string) {
+  await firebaseAuthRequest('delete', { idToken });
+}
 
 export default function GerenciarUsuarios() {
   const { user, profile, refreshProfile } = useAuth();
-  const { usernames: scrapedNames } = useScrapedUsernames();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showCadastro, setShowCadastro] = useState(false);
+  const shouldLoadScrapedNames = showCadastro || editingId !== null;
+  const { usernames: scrapedNames } = useScrapedUsernames(shouldLoadScrapedNames);
   const { getRank } = useRankLookup();
     // Não precisa mais do profiles diretamente
 
@@ -37,12 +156,12 @@ export default function GerenciarUsuarios() {
     const isAdmin = isLeader || isHighLeader;
 
     // Tabs
-    const [activeTab] = useState<'members' | 'spins' | 'powerspins' | 'casino'>('members');
+  const [activeTab] = useState<'members' | 'spins' | 'powerspins' | 'casino'>('members');
   const [usuarios, setUsuarios] = useState<(UserProfile & { docId: string })[]>([]);
   const [search, setSearch] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ nick: '', discord: '', cargo: '', nickJogo: '', extraSpins: 0, powerSpins: 0 });
+  const [editForm, setEditForm] = useState({ nick: '', discord: '', cargo: '', nickJogo: '', password: '' });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Spins State
   const [spins, setSpins] = useState<any[]>([]);
@@ -53,11 +172,10 @@ export default function GerenciarUsuarios() {
 
   // --- Pagination & Sorting state ---
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'dataEntrada', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'nick', direction: 'asc' });
   const itemsPerPage = 20;
 
   // --- Cadastro state ---
-  const [showCadastro, setShowCadastro] = useState(false);
   const [cadEmail, setCadEmail] = useState('');
   const [cadSenha, setCadSenha] = useState('');
   const [cadNick, setCadNick] = useState('');
@@ -70,12 +188,29 @@ export default function GerenciarUsuarios() {
 
   async function loadAll() {
     setLoading(true);
-    const snap = await getDocs(collection(db, 'usuarios'));
-    const list: (UserProfile & { docId: string })[] = [];
-    snap.forEach(d => list.push({ ...(d.data() as UserProfile), docId: d.id }));
-    list.sort((a, b) => a.nick.localeCompare(b.nick));
-    setUsuarios(list);
-    setLoading(false);
+    setLoadError('');
+    try {
+      const list = await fetchAllUsers();
+      setUsuarios(list);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setLoadError('Nao foi possivel carregar os usuarios agora. Tente atualizar os dados.');
+      setUsuarios([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchAllUsers() {
+    const snap = await timeoutAfter(dbGet(dbRef(rtdb, 'usuarios')), USERS_LOAD_TIMEOUT_MS, 'usuarios');
+    const data = snap.exists() ? snap.val() as Record<string, Record<string, unknown>> : {};
+
+    return Object.entries(data)
+      .map(([uid, value]) => {
+        const currentUserEmail = uid === user?.uid ? user.email || '' : '';
+        return normalizeUserDoc(value, uid, currentUserEmail);
+      })
+      .sort((a, b) => a.nick.localeCompare(b.nick));
   }
 
   async function loadSpins() {
@@ -92,9 +227,7 @@ export default function GerenciarUsuarios() {
         
         let currentUsers = usuarios;
         if (currentUsers.length === 0) {
-            const uSnap = await getDocs(collection(db, 'usuarios'));
-            const uList: any[] = [];
-            uSnap.forEach(u => uList.push({ ...u.data(), docId: u.id }));
+            const uList = await fetchAllUsers();
             currentUsers = uList;
             setUsuarios(uList);
         }
@@ -130,9 +263,7 @@ export default function GerenciarUsuarios() {
         
         let currentUsers = usuarios;
         if (currentUsers.length === 0) {
-            const uSnap = await getDocs(collection(db, 'usuarios'));
-            const uList: any[] = [];
-            uSnap.forEach(u => uList.push({ ...u.data(), docId: u.id }));
+            const uList = await fetchAllUsers();
             currentUsers = uList;
             setUsuarios(uList);
         }
@@ -165,41 +296,91 @@ export default function GerenciarUsuarios() {
 
   function startEdit(u: UserProfile & { docId: string }) {
     setEditingId(u.docId);
-    setEditForm({ 
-        nick: u.nick, 
-        discord: u.discord, 
-        cargo: u.cargo, 
+    setEditForm({
+        nick: u.nick,
+        discord: u.discord,
+        cargo: getAccessLabel(u.cargo),
         nickJogo: u.nickJogo || '',
-        extraSpins: u.extraSpins || 0,
-        powerSpins: u.powerSpins || 0,
+        password: '',
     });
   }
 
-  async function saveEdit(docId: string) {
+  async function saveEdit(u: UserProfile & { docId: string }) {
     try {
-      await updateDoc(doc(db, 'usuarios', docId), {
+      await dbUpdate(dbRef(rtdb, `usuarios/${u.docId}`), {
         nick: editForm.nick,
         discord: editForm.discord,
-        cargo: editForm.cargo,
+        cargo: accessToCargo(editForm.cargo as typeof ACCESS_OPTIONS[number]),
         nickJogo: editForm.nickJogo,
-        extraSpins: Number(editForm.extraSpins),
-        powerSpins: Number(editForm.powerSpins),
       });
+
+      if (editForm.password.trim()) {
+        await sendPasswordResetEmail(auth, u.email);
+      }
+
       setEditingId(null);
+      setEditForm(prev => ({ ...prev, password: '' }));
       await loadAll();
     } catch (err) {
       console.error('Error editing:', err);
+      setLoadError('Nao foi possivel salvar a edicao. Se alterou senha, confirme se o usuario tem email valido no Auth.');
     }
   }
 
   async function handleDelete(docId: string, nickName: string) {
     if (!confirm(`Are you sure you want to remove "${nickName}"?`)) return;
     try {
-      await deleteDoc(doc(db, 'usuarios', docId));
+      await dbRemove(dbRef(rtdb, `usuarios/${docId}`));
       await loadAll();
     } catch (err) {
       console.error('Erro ao deletar:', err);
     }
+  }
+
+  async function findUsersByEmail(email: string) {
+    const targetEmail = normalizeEmail(email);
+    const snap = await timeoutAfter(dbGet(dbRef(rtdb, 'usuarios')), USERS_LOAD_TIMEOUT_MS, 'usuarios');
+    const matches: string[] = [];
+    const data = snap.exists() ? snap.val() as Record<string, Record<string, unknown>> : {};
+
+    Object.entries(data).forEach(([uid, value]) => {
+      const storedEmail = normalizeEmail(getStoredEmail(value));
+      if (storedEmail === targetEmail) matches.push(uid);
+    });
+
+    return matches;
+  }
+
+  async function removeFirestoreUsersByEmail(email: string) {
+    const matches = await findUsersByEmail(email);
+    await Promise.all(matches.map(docId => dbRemove(dbRef(rtdb, `usuarios/${docId}`))));
+    return matches.length;
+  }
+
+  async function removeDuplicateUserProfiles(email: string, keepUid: string) {
+    const matches = await findUsersByEmail(email);
+    const duplicates = matches.filter(docId => docId !== keepUid);
+    await Promise.all(duplicates.map(docId => dbRemove(dbRef(rtdb, `usuarios/${docId}`))));
+    return duplicates.length;
+  }
+
+  async function cleanEmailRegistration(email: string) {
+    const removed = await removeFirestoreUsersByEmail(email);
+    setCadSuccess(
+      removed > 0
+        ? `Removed ${removed} database record(s) for ${normalizeEmail(email)}. You can create it again now.`
+        : `No database record found for ${normalizeEmail(email)}.`
+    );
+    await loadAll();
+  }
+
+  async function saveProfileForAuthUser(authUser: AuthRestUser, email: string) {
+    await dbSet(dbRef(rtdb, `usuarios/${authUser.uid}`), createUserProfilePayload(authUser.uid, email, {
+      nick: cadNick,
+      nickJogo: cadNickJogo,
+      discord: cadDiscord,
+      isAdmin: cadIsAdmin,
+    }));
   }
 
   // Spin Actions
@@ -247,48 +428,67 @@ export default function GerenciarUsuarios() {
     setCadError('');
     setCadLoading(true);
     setCadSuccess('');
+    const emailToCreate = normalizeEmail(cadEmail);
+    let createdAuthUser: AuthRestUser | null = null;
+
     try {
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, cadEmail, cadSenha);
-      const uid = cred.user.uid;
-      await secondaryAuth.signOut();
+      createdAuthUser = await createAuthUser(emailToCreate, cadSenha);
+      await saveProfileForAuthUser(createdAuthUser, emailToCreate);
+      await removeDuplicateUserProfiles(emailToCreate, createdAuthUser.uid);
 
-      await setDoc(doc(db, 'usuarios', uid), {
-        userId: uid,
-        email: cadEmail,
-        nick: cadNick,
-        nickJogo: cadNickJogo,
-        discord: cadDiscord,
-        dataEntrada: Timestamp.now(),
-        cargo: cadIsAdmin ? 'Leader' : 'Street Cleaner',
-        extraSpins: 0,
-        powerSpins: 0,
-        lootSemanal: 0,
-        lootTotal: 0,
-        roletaDisponivel: 0,
-        criadoEm: Timestamp.now(),
-      });
-
-      setCadSuccess(`User "${cadNick}" successfully registered!`);
+      setCadSuccess(`User "${cadNick}" created in Auth and saved in database.`);
       setCadEmail(''); setCadSenha(''); setCadNick(''); setCadNickJogo(''); setCadDiscord(''); setCadIsAdmin(false);
       await loadAll();
     } catch (err: any) {
-      const code = err?.code || '';
-      if (code === 'auth/email-already-in-use') {
-        setCadError('Este email já está cadastrado.');
-      } else if (code === 'auth/weak-password') {
+      const code = err?.message || err?.code || '';
+
+      if (createdAuthUser && code !== 'EMAIL_EXISTS') {
+        await deleteAuthUser(createdAuthUser.idToken).catch((deleteError) => {
+          console.error('Failed to rollback auth user after profile creation error:', deleteError);
+        });
+      }
+
+      if (code === 'EMAIL_EXISTS') {
+        try {
+          const existingCred = await signInAuthUser(emailToCreate, cadSenha);
+          await saveProfileForAuthUser(existingCred, emailToCreate);
+          await removeDuplicateUserProfiles(emailToCreate, existingCred.uid);
+          setCadSuccess(`Auth confirmado. Perfil salvo para "${cadNick}".`);
+          setCadEmail(''); setCadSenha(''); setCadNick(''); setCadNickJogo(''); setCadDiscord(''); setCadIsAdmin(false);
+          await loadAll();
+        } catch (linkError: any) {
+          const linkCode = linkError?.message || linkError?.code || '';
+          if (linkCode === 'INVALID_LOGIN_CREDENTIALS' || linkCode === 'INVALID_PASSWORD') {
+            setCadError('Este email ja existe no Firebase Auth, mas a senha informada nao confere. Digite a senha cadastrada manualmente no Auth para criar o perfil no banco.');
+          } else {
+            setCadError(`Este email ja existe no Firebase Auth, mas nao foi possivel criar o perfil no banco (${linkCode}).`);
+          }
+        }
+      } else if (code === 'WEAK_PASSWORD' || code.includes('WEAK_PASSWORD')) {
         setCadError('A senha deve ter pelo menos 6 caracteres.');
+      } else if (code === 'INVALID_EMAIL') {
+        setCadError('Email invalido.');
+      } else if (code === 'OPERATION_NOT_ALLOWED') {
+        setCadError('Cadastro por email/senha esta desativado no Firebase Auth. Ative Email/Password em Authentication > Sign-in method.');
       } else {
-        setCadError('Erro ao cadastrar. Tente novamente.');
+        setCadError(`Erro ao cadastrar (${code || 'sem codigo'}): ${err?.message || 'sem detalhe'}`);
       }
     } finally {
       setCadLoading(false);
     }
   }
 
-  const filtered = usuarios.filter(u =>
-    u.nick.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return usuarios;
+
+    return usuarios.filter(u =>
+      u.nick.toLowerCase().includes(term) ||
+      (u.nickJogo || '').toLowerCase().includes(term) ||
+      (u.discord || '').toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term)
+    );
+  }, [search, usuarios]);
 
   const handleSort = (key: string) => {
     if (sortConfig.key === key) {
@@ -305,36 +505,45 @@ export default function GerenciarUsuarios() {
         : <span className="text-yellow-500 ml-1 font-sans text-[10px]">↑</span>;
   };
 
-  const sortedUsers = [...filtered].sort((a, b) => {
-    let valA: any = a[sortConfig.key as keyof typeof a] || '';
-    let valB: any = b[sortConfig.key as keyof typeof b] || '';
+  const sortedUsers = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let valA: any = a[sortConfig.key as keyof typeof a] || '';
+      let valB: any = b[sortConfig.key as keyof typeof b] || '';
 
-    // Handle Timestamps
-    if (sortConfig.key === 'dataEntrada') {
-      valA = a.dataEntrada?.toMillis?.() || 0;
-      valB = b.dataEntrada?.toMillis?.() || 0;
-    }
+      // Handle Timestamps
+      if (sortConfig.key === 'dataEntrada') {
+        valA = a.dataEntrada?.toMillis?.() || 0;
+        valB = b.dataEntrada?.toMillis?.() || 0;
+      }
 
-    if (sortConfig.key === 'rank') {
-    valA = getRank(a.nickJogo);
-    valB = getRank(b.nickJogo);
-    }
+      if (sortConfig.key === 'rank') {
+        valA = getRank(a.nickJogo || a.nick);
+        valB = getRank(b.nickJogo || b.nick);
+      }
 
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      const cmp = valA.localeCompare(valB);
-      return sortConfig.direction === 'asc' ? cmp : -cmp;
-    }
+      if (sortConfig.key === 'access') {
+        valA = getAccessLabel(a.cargo);
+        valB = getAccessLabel(b.cargo);
+      }
 
-    const nA = Number(valA) || 0;
-    const nB = Number(valB) || 0;
-    return sortConfig.direction === 'asc' ? nA - nB : nB - nA;
-  });
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        const cmp = valA.localeCompare(valB);
+        return sortConfig.direction === 'asc' ? cmp : -cmp;
+      }
+
+      const nA = Number(valA) || 0;
+      const nB = Number(valB) || 0;
+      return sortConfig.direction === 'asc' ? nA - nB : nB - nA;
+    });
+  }, [filtered, getRank, sortConfig]);
 
   const totalPages = Math.ceil(sortedUsers.length / itemsPerPage) || 1;
-  const paginatedUsers = sortedUsers.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedUsers = useMemo(() => {
+    return sortedUsers.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [currentPage, sortedUsers]);
 
 
   // Auto-promote superuser if needed
@@ -344,7 +553,7 @@ export default function GerenciarUsuarios() {
           const promoteUser = async () => {
               try {
                   // Force database update
-                  await updateDoc(doc(db, 'usuarios', profile.userId), { cargo: 'Leader' });
+                  await dbUpdate(dbRef(rtdb, `usuarios/${profile.userId}`), { cargo: 'Leader' });
                   // Refresh context to update UI immediately
                   await refreshProfile();
               } catch (err) {
@@ -455,6 +664,16 @@ export default function GerenciarUsuarios() {
                     <input type="email" value={cadEmail} onChange={e => setCadEmail(e.target.value)} required
                     className="w-full px-4 py-2 bg-gray-950 border border-white/10 rounded-sm text-white focus:outline-none focus:border-yellow-500 transition-colors text-sm font-mono"
                     placeholder="email@domain.com" />
+                    {cadEmail && (
+                      <button
+                        type="button"
+                        onClick={() => cleanEmailRegistration(cadEmail)}
+                        disabled={cadLoading}
+                        className="text-[10px] uppercase tracking-widest text-yellow-500 hover:text-yellow-400 disabled:text-gray-700"
+                      >
+                        Clean email record
+                      </button>
+                    )}
                 </div>
                 <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Secure Password</label>
@@ -516,114 +735,112 @@ export default function GerenciarUsuarios() {
                 </div>
             ) : (
             <div className="bg-gray-950/50 rounded-sm border border-white/10 overflow-hidden backdrop-blur-sm">
+                {loadError && (
+                  <div className="flex items-center justify-between gap-4 border-b border-yellow-900/30 bg-yellow-950/20 px-6 py-4 text-xs uppercase tracking-widest text-yellow-400">
+                    <span>{loadError}</span>
+                    <button
+                      onClick={loadAll}
+                      className="border border-yellow-900/50 px-3 py-1 text-[10px] font-bold text-yellow-300 hover:bg-yellow-900/20"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left font-mono">
-                    <thead className="text-[10px] text-gray-500 uppercase bg-black border-b border-white/10 tracking-wider">
+                  <thead className="text-[10px] text-gray-500 uppercase bg-black border-b border-white/10 tracking-wider">
                     <tr>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('nick')}><div className="flex items-center">Member {renderSortIcon('nick')}</div></th>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('nickJogo')}><div className="flex items-center">Status TS {renderSortIcon('nickJogo')}</div></th>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('email')}><div className="flex items-center">Email {renderSortIcon('email')}</div></th>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('discord')}><div className="flex items-center">Cargos Discord {renderSortIcon('discord')}</div></th>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('cargo')}><div className="flex items-center">Access {renderSortIcon('cargo')}</div></th>
-                        <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('rank')}><div className="flex items-center">Scrap Rank {renderSortIcon('rank')}</div></th>
-                          <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors whitespace-nowrap" onClick={() => handleSort('extraSpins')}><div className="flex items-center">Slot Spins {renderSortIcon('extraSpins')}</div></th>
-                          <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors whitespace-nowrap" onClick={() => handleSort('powerSpins')}><div className="flex items-center">Power Wheel Spins {renderSortIcon('powerSpins')}</div></th>
-                        <th className="px-6 py-4 text-center font-normal">Actions</th>
+                      <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('nick')}><div className="flex items-center">Usuario (username) {renderSortIcon('nick')}</div></th>
+                      <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('email')}><div className="flex items-center">Email {renderSortIcon('email')}</div></th>
+                      <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('discord')}><div className="flex items-center">Nome Discord {renderSortIcon('discord')}</div></th>
+                      <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('access')}><div className="flex items-center">Acesso {renderSortIcon('access')}</div></th>
+                      <th className="px-6 py-4 font-normal cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('rank')}><div className="flex items-center">Rank {renderSortIcon('rank')}</div></th>
+                      <th className="px-6 py-4 text-center font-normal">Editar / Apagar</th>
                     </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
                     {paginatedUsers.map(u => (
-                        <tr key={u.docId} className="hover:bg-white/5 transition-colors">
+                      <tr key={u.docId} className="hover:bg-white/5 transition-colors">
                         {editingId === u.docId ? (
-                            <>
+                          <>
                             <td className="px-6 py-3">
-                                <input value={editForm.nick} onChange={e => setEditForm({ ...editForm, nick: e.target.value })}
-                                className="w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs" />
-                            </td>
-                            <td className="px-6 py-3">
-                                <select value={editForm.nickJogo} onChange={e => setEditForm({ ...editForm, nickJogo: e.target.value })}
-                                className="w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs">
+                              <input value={editForm.nick} onChange={e => setEditForm({ ...editForm, nick: e.target.value })}
+                              className="w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs" />
+                              <select value={editForm.nickJogo} onChange={e => setEditForm({ ...editForm, nickJogo: e.target.value })}
+                              className="mt-2 w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-gray-300 text-xs">
                                 <option value="">None</option>
                                 {scrapedNames.map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
+                              </select>
                             </td>
-                            <td className="px-6 py-3 text-gray-500 text-xs">{u.email}</td>
+                            <td className="px-6 py-3 text-gray-500 text-xs">{u.email || <span className="text-gray-700">No email</span>}</td>
                             <td className="px-6 py-3">
-                                <input value={editForm.discord} onChange={e => setEditForm({ ...editForm, discord: e.target.value })}
-                                className="w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs" />
+                              <input value={editForm.discord} onChange={e => setEditForm({ ...editForm, discord: e.target.value })}
+                              className="w-full px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs" />
                             </td>
                             <td className="px-6 py-3">
-                                <select value={editForm.cargo} onChange={e => setEditForm({ ...editForm, cargo: e.target.value })}
-                                className="px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs">
-                                {CARGOS.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
+                              <select value={editForm.cargo} onChange={e => setEditForm({ ...editForm, cargo: e.target.value })}
+                              className="px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs">
+                                {ACCESS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            </td>
+                            <td className="px-6 py-3">
+                              <RankBadge rank={getRank(editForm.nickJogo || editForm.nick)} />
                             </td>
                             <td className="px-6 py-3 text-center">
-                                <span className="text-xs text-gray-500">-</span>
-                            </td>
-                            <td className="px-6 py-3">
-                                <input 
-                                    type="number" 
-                                    value={editForm.extraSpins} 
-                                    onChange={e => setEditForm({ ...editForm, extraSpins: Number(e.target.value) })}
-                                    className="w-16 px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs text-center" 
+                              <div className="flex items-center justify-center gap-2 min-w-[240px]">
+                                <input
+                                  type="password"
+                                  value={editForm.password}
+                                  onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                                  placeholder="Reset senha"
+                                  className="w-32 px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs"
                                 />
+                                <button onClick={() => saveEdit(u)} className="text-emerald-500 hover:text-emerald-400" title="Salvar"><Save className="w-4 h-4" /></button>
+                                <button onClick={() => setEditingId(null)} className="text-yellow-500 hover:text-yellow-400" title="Cancelar"><X className="w-4 h-4" /></button>
+                              </div>
                             </td>
-                            <td className="px-6 py-3">
-                                <input 
-                                    type="number" 
-                                    value={editForm.powerSpins} 
-                                    onChange={e => setEditForm({ ...editForm, powerSpins: Number(e.target.value) })}
-                                    className="w-16 px-2 py-1 bg-black border border-white/20 rounded-sm text-white text-xs text-center" 
-                                />
-                            </td>
-                            <td className="px-6 py-3 text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                <button onClick={() => saveEdit(u.docId)} className="text-emerald-500 hover:text-emerald-400"><Save className="w-4 h-4" /></button>
-                                <button onClick={() => setEditingId(null)} className="text-yellow-500 hover:text-yellow-400"><X className="w-4 h-4" /></button>
-                                </div>
-                            </td>
-                            </>
+                          </>
                         ) : (
-                            <>
-                            <td className="px-6 py-3 text-white font-serif tracking-wide">{u.nick}</td>
-                            <td className="px-6 py-3 text-gray-400 text-xs">{u.nickJogo || <span className="text-gray-700">—</span>}</td>
-                            <td className="px-6 py-3 text-gray-500 text-xs">{u.email}</td>
+                          <>
+                            <td className="px-6 py-3 text-white font-serif tracking-wide">
+                              <div>{u.nick || u.nickJogo || <span className="text-gray-700">No username</span>}</div>
+                              {u.nickJogo && u.nickJogo !== u.nick && <div className="text-[10px] text-gray-600 font-mono mt-1">{u.nickJogo}</div>}
+                            </td>
+                            <td className="px-6 py-3 text-gray-500 text-xs">{u.email || <span className="text-gray-700">No email</span>}</td>
                             <td className="px-6 py-3 text-gray-400 text-xs">{u.discord}</td>
                             <td className="px-6 py-3">
-                                <span className={cn(
+                              <span className={cn(
                                 "inline-flex px-2 py-0.5 rounded-sm text-[10px] uppercase font-bold tracking-widest border",
-                                u.cargo === 'Leader' ? "bg-yellow-950/20 text-yellow-500 border-yellow-900/40" :
-                                u.cargo === 'Sub-Leader' ? "bg-gray-800 text-gray-300 border-gray-700" :
-                                "bg-gray-900/50 text-gray-500 border-gray-800"
-                                )}>
-                                {u.cargo}
-                                </span>
+                                getAccessLabel(u.cargo) === 'Admin' ? "bg-yellow-950/20 text-yellow-500 border-yellow-900/40" : "bg-gray-900/50 text-gray-500 border-gray-800"
+                              )}>
+                                {getAccessLabel(u.cargo)}
+                              </span>
                             </td>
                             <td className="px-6 py-3">
-                                <RankBadge rank={getRank(u.nickJogo)} />
-                            </td>
-                            <td className="px-6 py-3 text-center text-xs font-bold text-emerald-500">
-                                {u.extraSpins && u.extraSpins > 0 ? `+${u.extraSpins}` : <span className="text-gray-700">0</span>}
-                            </td>
-                            <td className="px-6 py-3 text-center text-xs font-bold text-emerald-500">
-                                {u.powerSpins && u.powerSpins > 0 ? `+${u.powerSpins}` : <span className="text-gray-700">0</span>}
+                              <RankBadge rank={getRank(u.nickJogo || u.nick)} />
                             </td>
                             <td className="px-6 py-3 text-center">
-                                <div className="flex items-center justify-center gap-3">
+                              <div className="flex items-center justify-center gap-3">
                                 <button onClick={() => startEdit(u)} className="text-gray-400 hover:text-white transition-colors" title="Edit">
-                                    <Edit3 className="w-4 h-4" />
+                                  <Edit3 className="w-4 h-4" />
                                 </button>
                                 <button onClick={() => handleDelete(u.docId, u.nick)} className="text-yellow-900 hover:text-yellow-500 transition-colors" title="Purge">
-                                    <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
-                                </div>
+                              </div>
                             </td>
-                            </>
+                          </>
                         )}
-                        </tr>
+                      </tr>
                     ))}
-                    </tbody>
+                    {paginatedUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-gray-600 uppercase tracking-widest">
+                          No users found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
                 </table>
                 </div>
 

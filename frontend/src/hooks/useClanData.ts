@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { canonicalizeRank, safeDecodeURIComponent } from '../lib/rank';
-import { getOrCreateDailyLootBaseline, resolveDailyLootBaselineFromDailyData } from '../lib/dailyBaseline';
+import { getOrCreateDailyLootBaseline, resolveDailyLootBaselineFromDailyData, resolveDailyValueBaselineFromDailyData } from '../lib/dailyBaseline';
 
 const FIREBASE_URL = "https://dead-bb-default-rtdb.firebaseio.com";
 const REFRESH_MS = 5 * 60 * 1000;
@@ -72,7 +72,6 @@ export function useClanData() {
 
       const profiles = profRes && profRes.ok ? await profRes.json() : {};
       const dailyData = dailyRes && dailyRes.ok ? await dailyRes.json() : {};
-      const dailyDates = Object.keys(dailyData || {}).sort();
 
       if (!profiles || profiles.error) {
         setData([]);
@@ -109,20 +108,13 @@ export function useClanData() {
           currentAll,
         );
 
-        // Retroactive baseline search for TS
-        let baselineExp: number | null = null;
-
-        for (let i = dailyDates.length - 1; i >= 0; i--) {
-            const snap = dailyData[dailyDates[i]]?.[dbUserKey];
-            if (snap) {
-                if (baselineExp === null && snap.total_exp !== undefined) {
-                    baselineExp = snap.total_exp;
-                }
-                if (baselineExp !== null) {
-                    break;
-                }
-            }
-        }
+        const baselineExp = resolveDailyValueBaselineFromDailyData(
+          dailyData,
+          username,
+          dbUserKey,
+          currentTotalExp,
+          ['total_exp'],
+        );
 
         let dailyLoot = 0;
         if (baselineLoot !== null) {

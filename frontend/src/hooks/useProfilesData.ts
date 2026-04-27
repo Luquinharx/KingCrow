@@ -6,6 +6,7 @@ import {
   resolveRank,
   safeDecodeURIComponent,
 } from '../lib/rank';
+import { resolveDailyValueBaselineFromDailyData } from '../lib/dailyBaseline';
 
 const FIREBASE_URL = "https://dead-bb-default-rtdb.firebaseio.com";
 const REFRESH_MS = 5 * 60 * 1000;
@@ -107,16 +108,6 @@ function parseProfiles(rawProfiles: unknown, rawDailyData: unknown): MemberProfi
 
   const dates = Object.keys(dailyData).sort();
 
-  const getBaselineExp = (dbUserKey: string): number | null => {
-    for (let i = dates.length - 1; i >= 0; i -= 1) {
-      const userSnap = dailyData[dates[i]]?.[dbUserKey];
-      if (userSnap && userSnap.total_exp !== undefined) {
-        return toNumberValue(userSnap.total_exp);
-      }
-    }
-    return null;
-  };
-
   const dailyRankByUsername = new Map<string, string>();
 
   for (let i = dates.length - 1; i >= 0; i -= 1) {
@@ -147,7 +138,13 @@ function parseProfiles(rawProfiles: unknown, rawDailyData: unknown): MemberProfi
 
     const totalExp = toNumberValue(p.total_exp);
     const dbUserKey = encodeURIComponent(username).replace(/\./g, "%2E");
-    const baselineExp = getBaselineExp(dbUserKey);
+    const baselineExp = resolveDailyValueBaselineFromDailyData(
+      dailyData,
+      username,
+      dbUserKey,
+      totalExp,
+      ['total_exp'],
+    );
     const dailyTSCalc = baselineExp !== null ? Math.max(0, totalExp - baselineExp) : 0;
 
     const directRank = canonicalizeRank(toStringValue(p.rank));

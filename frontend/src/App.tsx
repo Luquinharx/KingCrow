@@ -10,6 +10,7 @@ import EstatisticasTS from './components/pages/EstatisticasTS';
 import Cassino from './components/pages/Cassino';
 import Perfil from './components/pages/Perfil';
 import GerenciarUsuarios from './components/pages/GerenciarUsuarios';
+import AdminAudit from './components/pages/AdminAudit';
 import Home from './components/pages/Home';
 import Navbar from './components/Navbar';
 
@@ -40,6 +41,7 @@ function App() {
             <Route path="/roleta" element={<Navigate to="/cassino" replace />} />
           <Route path="/perfil" element={<ProtectedRoute><PublicLayout><Perfil /></PublicLayout></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><PublicLayout><GerenciarUsuarios /></PublicLayout></ProtectedRoute>} />
+          <Route path="/admin-auditoria" element={<ProtectedRoute><PublicLayout><AdminAudit /></PublicLayout></ProtectedRoute>} />
           
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

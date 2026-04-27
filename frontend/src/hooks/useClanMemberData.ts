@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getOrCreateDailyLootBaseline, resolveDailyLootBaselineFromDailyData } from "../lib/dailyBaseline";
+import { getOrCreateDailyLootBaseline, resolveDailyLootBaselineFromDailyData, resolveDailyValueBaselineFromDailyData } from "../lib/dailyBaseline";
 
 const FIREBASE_RT_URL = "https://dead-bb-default-rtdb.firebaseio.com";
 const REFRESH_MS = 5 * 60 * 1000;
@@ -38,11 +38,18 @@ export interface ClanMemberStats {
   weeklyHistory: { semana: string; loot: number; ts: number }[];
 }
 
-export function useScrapedUsernames() {
+export function useScrapedUsernames(enabled = true) {
   const [usernames, setUsernames] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
     async function load() {
       try {
         const res = await fetch(FIREBASE_RT_URL + "/profiles.json?shallow=true");
@@ -70,7 +77,7 @@ export function useScrapedUsernames() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [enabled]);
 
   return { usernames, loading };
 }
@@ -118,20 +125,13 @@ export function useClanMemberData(username: string | undefined) {
         dbUser,
         allTimeLootsUser,
       );
-      let baselineExp: number | null = null;
-
-      // Find latest valid snapshot for TS baseline
-      for (let i = dates.length - 1; i >= 0; i -= 1) {
-        const snap = dailyData[dates[i]]?.[dbUser];
-        if (snap) {
-          if (baselineExp === null && snap.total_exp !== undefined) {
-            baselineExp = snap.total_exp;
-          }
-          if (baselineExp !== null) {
-            break;
-          }
-        }
-      }
+      const baselineExp = resolveDailyValueBaselineFromDailyData(
+        dailyData,
+        username,
+        dbUser,
+        currentTotalExp,
+        ['total_exp'],
+      );
 
       if (baselineLoot !== null) {
         dailyLoot = Math.max(0, allTimeLootsUser - baselineLoot);

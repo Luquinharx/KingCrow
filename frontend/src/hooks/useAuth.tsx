@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { get, ref, set, update } from 'firebase/database';
+import { auth, rtdb } from '../lib/firebase';
 import { isSuperAdminEmail } from '../lib/admin';
+
+const PROFILE_LOAD_TIMEOUT_MS = 8000;
 
 export interface UserProfile {
   userId: string;
@@ -36,24 +38,39 @@ const AuthContext = createContext<AuthContextType>({
   refreshProfile: async () => {},
 });
 
+function timeoutAfter<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchProfile(u: User) {
-    const snap = await getDoc(doc(db, 'usuarios', u.uid));
+  async function fetchProfile(u: User): Promise<UserProfile | null> {
+    const profileRef = ref(rtdb, `usuarios/${u.uid}`);
+    const snap = await timeoutAfter(get(profileRef), PROFILE_LOAD_TIMEOUT_MS, 'profile');
+
     if (snap.exists()) {
-      const data = snap.data() as UserProfile;
+      const data = snap.val() as UserProfile;
       if (isSuperAdminEmail(u.email) && data.cargo !== 'Leader') {
-        const { updateDoc } = await import('firebase/firestore');
-        await updateDoc(doc(db, 'usuarios', u.uid), { cargo: 'Leader' });
+        update(profileRef, { cargo: 'Leader' }).catch((error) => {
+          console.error('Erro ao promover super admin:', error);
+        });
         data.cargo = 'Leader';
       }
-      setProfile(data);
+      return data;
     } else {
       if (isSuperAdminEmail(u.email)) {
-        setProfile({
+        const superAdminProfile: UserProfile = {
           userId: u.uid,
           email: u.email || '',
           nick: u.displayName || 'Super Admin',
@@ -67,22 +84,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           extraSpins: 0,
           powerSpins: 0,
           criadoEm: new Date().toISOString(),
+        };
+
+        set(profileRef, superAdminProfile).catch((error) => {
+          console.error('Erro ao salvar perfil do super admin:', error);
         });
-      } else {
-        setProfile(null);
+
+        return superAdminProfile;
       }
+
+      return null;
     }
   }
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      if (u) {
-        await fetchProfile(u);
-      } else {
+      try {
+        if (u) {
+          setProfile(await fetchProfile(u));
+        } else {
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar perfil do usuario:', error);
         setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsub;
   }, []);
@@ -94,7 +123,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshProfile() {
-    if (user) await fetchProfile(user);
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    try {
+      setProfile(await fetchProfile(user));
+    } catch (error) {
+      console.error('Erro ao atualizar perfil do usuario:', error);
+      setProfile(null);
+    }
   }
 
   return (

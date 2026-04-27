@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useClanMemberData } from '../../hooks/useClanMemberData';
 import { useCasinoConfig } from '../../hooks/useCasinoConfig';
-import { db } from '../../lib/firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, updateDoc, doc, increment } from 'firebase/firestore';
+import { db, rtdb } from '../../lib/firebase';
+import { ref as dbRef, update as dbUpdate, increment as dbIncrement } from 'firebase/database';
+import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import { Gift } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -140,8 +141,8 @@ export default function Roleta() {
       // Se usou um giro extra (porque n+�o tinha mais semanais ou n+�o era qualificado), debitar
       const hasWeeklyAvailable = weeklyTotal > girosUsados;
       if (!hasWeeklyAvailable && extraSpins > 0) {
-        await updateDoc(doc(db, 'usuarios', profile.userId), {
-            extraSpins: increment(-1)
+        await dbUpdate(dbRef(rtdb, `usuarios/${profile.userId}`), {
+            extraSpins: dbIncrement(-1)
         });
       }
 

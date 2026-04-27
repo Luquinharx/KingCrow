@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useClanMemberData } from '../../hooks/useClanMemberData';
 import { usePowerRouletteConfig, type PowerRoulettePrize } from '../../hooks/usePowerRouletteConfig';
-import { db } from '../../lib/firebase';
-import { collection, query, where, getDocs, addDoc, Timestamp, updateDoc, doc, increment } from 'firebase/firestore';
+import { db, rtdb } from '../../lib/firebase';
+import { ref as dbRef, update as dbUpdate, increment as dbIncrement } from 'firebase/database';
+import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
 import { Zap, Info } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -149,8 +150,8 @@ export default function PowerRoleta() {
 
       const hasWeeklyAvailable = weeklyTotal > usedSpins;
       if (!hasWeeklyAvailable && powerSpins > 0) {
-        await updateDoc(doc(db, 'usuarios', profile.userId), {
-            powerSpins: increment(-1)
+        await dbUpdate(dbRef(rtdb, `usuarios/${profile.userId}`), {
+            powerSpins: dbIncrement(-1)
         });
       }
     } catch (err) {

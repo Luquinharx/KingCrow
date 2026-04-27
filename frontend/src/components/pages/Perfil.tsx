@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { ref as dbRef, update as dbUpdate } from 'firebase/database';
+import { db, rtdb } from '../../lib/firebase';
 import { useAuth } from '../../hooks/useAuth';
 import { useClanMemberData } from '../../hooks/useClanMemberData';
 import { useFirestoreClanData } from '../../hooks/useFirestoreClanData';
@@ -60,7 +61,7 @@ export default function Perfil() {
     if (!profile?.userId) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'usuarios', profile.userId), { nick, discord });
+      await dbUpdate(dbRef(rtdb, `usuarios/${profile.userId}`), { nick, discord });
       await refreshProfile();
       setEditing(false);
     } catch (err) {
